@@ -1,0 +1,99 @@
+/**
+ * Mega Kadence Bridge — Admin Settings Page Styles
+ */
+
+.mkb-wrap {
+	max-width: 900px;
+}
+
+.mkb-tagline {
+	font-size: 15px;
+	color: #50575e;
+	margin: 16px 0 24px;
+}
+
+.mkb-card {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	padding: 20px 24px;
+	margin: 0 0 20px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.mkb-card h2 {
+	margin-top: 0;
+	border-bottom: 1px solid #f0f0f1;
+	padding-bottom: 12px;
+	margin-bottom: 16px;
+}
+
+.mkb-env-block {
+	background: #1d2327;
+	color: #f0f0f1;
+	padding: 16px 20px;
+	border-radius: 4px;
+	font-family: Menlo, Monaco, "Courier New", monospace;
+	font-size: 13px;
+	line-height: 1.6;
+	overflow-x: auto;
+	user-select: all;
+	margin: 12px 0 16px;
+}
+
+.mkb-copy-button {
+	margin-right: 12px !important;
+}
+
+.mkb-copy-feedback {
+	color: #008a20;
+	font-weight: 500;
+	transition: opacity 200ms ease-out;
+	opacity: 0;
+}
+
+.mkb-copy-feedback.mkb-visible {
+	opacity: 1;
+}
+
+.mkb-status-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.mkb-status-table th,
+.mkb-status-table td {
+	text-align: left;
+	padding: 10px 12px;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.mkb-status-table th {
+	width: 40%;
+	font-weight: 500;
+	color: #50575e;
+}
+
+.mkb-status-table tr:last-child th,
+.mkb-status-table tr:last-child td {
+	border-bottom: none;
+}
+
+.mkb-badge {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 10px;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.4;
+}
+
+.mkb-badge-ok {
+	background: #d4edda;
+	color: #0c5c23;
+}
+
+.mkb-badge-neutral {
+	background: #f0f0f1;
+	color: #50575e;
+}

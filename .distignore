@@ -1,0 +1,21 @@
+# Files and directories excluded from the release ZIP
+# (but still tracked in git)
+
+.git
+.github
+.gitignore
+.distignore
+.editorconfig
+.phpcs.xml.dist
+phpcs.xml.dist
+phpunit.xml.dist
+
+tests/
+node_modules/
+vendor/
+
+# Dev artifacts
+*.log
+.DS_Store
+
+# The release script adds plugin-update-checker separately

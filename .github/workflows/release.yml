@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version $VERSION"
+
+      - name: Verify plugin version matches tag
+        run: |
+          PLUGIN_VERSION=$(grep -E "^\s*\*\s*Version:" mega-kadence-bridge.php | head -1 | sed -E 's/.*Version:\s*//' | tr -d ' ')
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$PLUGIN_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: Plugin header version ($PLUGIN_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "Plugin version matches tag: $PLUGIN_VERSION"
+
+      - name: Download plugin-update-checker library
+        run: |
+          mkdir -p includes/lib
+          cd includes/lib
+          curl -sL https://github.com/YahnisElsts/plugin-update-checker/archive/refs/tags/v5.6.zip -o puc.zip
+          unzip -q puc.zip
+          mv plugin-update-checker-5.6 plugin-update-checker
+          rm puc.zip
+          echo "Plugin-update-checker library installed"
+
+      - name: Build release ZIP
+        run: |
+          # Create a clean staging directory
+          mkdir -p /tmp/mega-kadence-bridge
+
+          # Copy plugin files, respecting .distignore
+          rsync -av \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.gitignore' \
+            --exclude='.distignore' \
+            --exclude='.editorconfig' \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='tests' \
+            --exclude='*.log' \
+            --exclude='.DS_Store' \
+            --exclude='*.zip' \
+            ./ /tmp/mega-kadence-bridge/
+
+          # Create the ZIP with the plugin in a top-level folder matching the slug
+          cd /tmp
+          zip -r mega-kadence-bridge.zip mega-kadence-bridge/
+          mv mega-kadence-bridge.zip $GITHUB_WORKSPACE/
+          ls -la $GITHUB_WORKSPACE/mega-kadence-bridge.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mega-kadence-bridge.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false

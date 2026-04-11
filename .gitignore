@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Composer (not currently used but allow future)
+vendor/
+composer.phar
+
+# Node (not currently used but allow future)
+node_modules/
+
+# Build output
+/build/
+/dist/
+*.zip
+
+# Local test/dev artifacts
+.wp-env/
+wp-cli.local.yml
+
+# Plugin-update-checker library placed here during build
+includes/lib/plugin-update-checker/
+
+# Environment
+.env
+.env.local
