@@ -966,3 +966,167 @@ The mission, restated for the last time:
 > Not a Claude that knows Kadence. The world's foremost operator. A Claude instance that wields Kadence with absolute, complete, indisputable expertise — every setting, every block, every gotcha, every workflow. When a user says the slightest thing about Kadence, Claude knows exactly what to do.
 
 — End of Session 1 dev log.
+
+---
+---
+
+# SESSION 2: First Deployment & Dogfooding (2026-04-12 → 2026-04-13)
+
+**Continuation of Session 1 context** (same Claude instance, ~47% context used at session boundary).
+
+## What Happened
+
+### mega.management Stood Up
+
+The user set up mega.management as the dogfood target:
+- Fresh Hostinger account, one-click WordPress install
+- Google Workspace configured for branded email
+- Google Cloud Console project set up (OAuth for MEGA Retail)
+- Stripe configuration in progress for payments
+
+### Plugin Deployed to mega.management
+
+Installed via WP Admin → Plugins → Upload Plugin → activate. Also installed:
+- Kadence Theme (free, v1.4.5 — latest)
+- Kadence Blocks (free, v3.6.7 — latest)
+- WooCommerce (v10.6.2 — latest)
+- Mega Kadence Bridge (v1.0.0 — our plugin)
+
+### Three Issues Discovered During Dogfooding
+
+#### Issue 1: Hostinger Bloatware Disables Application Passwords
+
+**Severity:** Blocker
+**Root cause:** Hostinger pre-installs 4 plugins (Hostinger AI, Hostinger Easy Onboarding, Hostinger Reach, Hostinger Tools). The **Hostinger Tools** plugin has a setting that **disables WordPress Application Passwords by default**. Since our bridge relies on Application Passwords for auth, the plugin activates and creates the `claude-bot` user, but the generated Application Password is unusable.
+
+**How we discovered it:** Bridge returned 401 on every authenticated request. Even WordPress's native REST endpoint (`/wp/v2/users/me`) returned "rest_not_logged_in" with valid credentials. User found the toggle in hPanel → WordPress → Tools → "Disable application passwords" was ON.
+
+**Fix applied:** User manually toggled "Disable application passwords" OFF in Hostinger Tools, then deactivated + reactivated Mega Kadence Bridge to regenerate the Application Password.
+
+**Fix needed for v1.0.1:**
+1. Detect if Application Passwords are disabled during activation → show a clear admin error with instructions
+2. Consider programmatically re-enabling Application Passwords by removing whatever filter Hostinger Tools uses (investigate the filter name)
+3. Add to install docs: "If you're on Hostinger, disable the 'Disable application passwords' setting in Hostinger Tools before installing Mega Kadence Bridge"
+4. Add to student onboarding flow as a required step
+
+**Hostinger bloatware inventory (for documentation):**
+
+| Plugin | Needed? | Action |
+|---|---|---|
+| Hostinger AI (3.0.33) | No | Deactivate + Delete |
+| Hostinger Easy Onboarding (2.1.15) | No | Deactivate + Delete |
+| Hostinger Reach (1.4.5) | No | Deactivate + Delete |
+| Hostinger Tools (3.0.62) | Keep for now | Has the app password toggle |
+| LiteSpeed Cache (7.8.1) | Yes | Keep — essential for caching |
+
+#### Issue 2: LiteSpeed Strips Authorization Header
+
+**Severity:** Blocker
+**Root cause:** Hostinger's LiteSpeed server strips the HTTP `Authorization` header before it reaches PHP. This is a known issue on many shared hosting providers that use CGI/FastCGI to run PHP.
+
+**How we discovered it:** Even after fixing the Application Password toggle, auth still failed. Testing against WP's native REST API also failed, proving it was server-level, not plugin-level.
+
+**Fixes attempted:**
+1. `SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1` in `.htaccess` — **DID NOT WORK** on Hostinger's LiteSpeed
+2. `CGIPassAuth On` in `.htaccess` — **WORKED** (LiteSpeed-native directive)
+
+Both lines are now in `.htaccess` on mega.management (belt and suspenders). The fix that actually resolved it was `CGIPassAuth On`.
+
+**Fix needed for v1.0.1:**
+- Auto-write `CGIPassAuth On` to `.htaccess` during plugin activation using WordPress's `insert_with_markers()` function
+- Check if the line already exists before adding
+- This is standard practice (Wordfence, LiteSpeed Cache plugin, WP Super Cache all modify `.htaccess`)
+
+**The `.htaccess` on mega.management now looks like:**
+```apache
+CGIPassAuth On
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+# BEGIN LSCACHE
+...
+```
+
+#### Issue 3: /blocks Endpoint Returns 0 Due to Caching
+
+**Severity:** Minor (self-resolving)
+**Root cause:** The `/blocks` endpoint was first called BEFORE Kadence Blocks was installed. The REST API response was cached (by LiteSpeed or WP object cache). After installing Kadence Blocks and flushing the cache, the endpoint correctly returned 59 blocks.
+
+**Fix:** Already handled — just needed a cache flush. No code change required. But this is a good reminder that `/cache/flush` should be called after installing any new plugin.
+
+### Smoke Test Results — ALL PASS
+
+After all three issues were resolved, full smoke test passed:
+
+| Test | Endpoint | Result |
+|---|---|---|
+| Site info | `GET /info` | ✅ WP 6.9.4, PHP 8.3.30, Kadence 1.4.5, Bridge 1.0.0 |
+| Theme settings | `GET /settings` | ✅ Accessible (4 on fresh install) |
+| Page render | `GET /render?url=/` | ✅ 200 OK, 45,861 chars, Kadence markup |
+| Cache flush | `POST /cache/flush` | ✅ wp_object_cache, litespeed_hook, transients |
+| Kadence blocks | `GET /blocks` | ✅ **59 blocks** registered |
+| WooCommerce | `GET /woo/status` | ✅ WC 10.6.2, USD, active |
+| Plugin list | `GET /plugins` | ✅ 8 plugins reporting correctly |
+| PHP eval | `POST /wp-eval` | ✅ Executes and returns |
+
+### Live Site Configuration (as of Session 2 end)
+
+**mega.management current state:**
+- WordPress 6.9.4, PHP 8.3.30
+- Kadence Theme 1.4.5 (free, active)
+- Kadence Blocks 3.6.7 (free, active) — 59 blocks registered
+- WooCommerce 10.6.2 (active, setup wizard skipped)
+- Mega Kadence Bridge 1.0.0 (active, all endpoints operational)
+- LiteSpeed Cache 7.8.1 (active)
+- Hostinger Tools 3.0.62 (active, app passwords now enabled)
+- Hostinger AI, Easy Onboarding, Reach (deactivated by user, recommended for deletion)
+- Kadence Pro: NOT installed yet (user has lifetime license, will add later)
+- Kadence Blocks Pro: NOT installed yet
+- No pages created yet (default WP "Hello World" post only)
+- WooCommerce not configured (no products, no payment gateways)
+
+**Bridge credentials for mega.management:**
+```
+BRIDGE_URL=https://mega.management/wp-json/mega-kadence-bridge/v1
+BRIDGE_USER=claude-bot
+BRIDGE_PASS=xuBOHA946XfwbxBRKJWd6MW3
+BRIDGE_SITE=https://mega.management
+```
+
+**SSH access (unchanged from Session 1):**
+```
+ssh -p 65002 u616193506@77.37.88.129
+```
+
+**`.htaccess` modifications applied:**
+- Line 1: `CGIPassAuth On`
+- Line 2: `SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1`
+
+## v1.0.1 Patch TODO
+
+Based on dogfooding discoveries, v1.0.1 needs:
+
+1. **Auto-detect disabled Application Passwords** → clear admin error during activation
+2. **Auto-write `CGIPassAuth On` to `.htaccess`** during activation (using `insert_with_markers()`)
+3. **Programmatically re-enable Application Passwords** if disabled by Hostinger Tools (investigate the filter)
+4. **Update README** with Hostinger-specific instructions
+5. **Update onboarding flow** to include "disable Hostinger bloatware" step
+
+## What's Next
+
+The bridge is fully operational on mega.management. The next step is:
+
+**Option A (recommended by Claude): Run the 14-question onboarding questionnaire and build out mega.management** — full 7-section homepage, About page, Contact page, Shop configuration, all through the bridge. This is the real-world test of "the world's foremost operator of Kadence" doing its thing.
+
+**The user confirmed Option A.** Building out mega.management is the next action.
+
+## Session 2 Status
+
+- ✅ Mega Kadence Bridge deployed to mega.management
+- ✅ Three deployment issues discovered and resolved (app passwords, .htaccess, cache)
+- ✅ All 8 smoke tests passing
+- ✅ Bridge fully operational — Claude can read and write to mega.management
+- ⬜ v1.0.1 patch (3 fixes from dogfooding) — queued
+- ⬜ mega.management site buildout — NEXT
+- ⬜ Tranche 1 SOPs — after buildout
+- ⬜ Tranche 2 + 3 SOPs — future sessions
+
+— End of Session 2 dev log.
