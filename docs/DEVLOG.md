@@ -1130,3 +1130,61 @@ The bridge is fully operational on mega.management. The next step is:
 - ⬜ Tranche 2 + 3 SOPs — future sessions
 
 — End of Session 2 dev log.
+
+---
+
+# SESSION 2 ADDENDUM: Live Site Build + 11 Gotchas Discovered (2026-04-13)
+
+## mega.management Homepage Built Through Bridge
+
+Built a full 5-section dark-mode homepage for mega.management entirely through the bridge API:
+- Hero section (headline + pain-point eliminator + 2 CTA buttons)
+- Features row (6 AI Models / 45 Products / Auto-Published)
+- How It Works (3-step process: Describe → Pick → Publish)
+- CTA Band ("Eliminate Tedium. Dominate Your Niche.")
+- Logo uploaded via Cloudinary → bridge sideload pipeline
+
+**Brand identity applied:**
+- Name: MEGA (Mass e-Commerce Product Engine)
+- Palette: Molten Lava Orange (#FF5500) + Fire Spark Yellow (#FFB800) on Black Char (#0A0A0A)
+- Font: Anton (headings) + Inter (body)
+- Dark mode with edge-to-edge section backgrounds
+- Logo: metallic chrome + fire PNG, 275px max width
+
+## 11 Deployment Gotchas Discovered and Documented
+
+Full reference: `/home/userjjai/kadence-skill/references/kadence-sop/recipes/dark-mode-site-deploy-gotchas.md`
+
+1. `logo_layout` must be array, not string
+2. Content background + boxed layout creates white border
+3. Hero `minHeight` with `vh` creates massive gaps — use padding only
+4. Sticky header defaults to white background — must override
+5. Mobile nav text defaults to black — invisible on dark themes
+6. Footer shows Kadence credit by default — must replace
+7. White flash during scroll from wrapper element backgrounds
+8. Unicode escapes render as literal text in block content
+9. Homepage needs fullwidth layout + maxWidth on rows (1290px)
+10. Block validation errors require "Attempt Recovery" in editor
+11. Kadence palette stored as JSON string, not PHP array
+
+**All 11 gotchas have bridge-level fixes documented with exact curl commands.**
+
+**23-step dark mode deploy checklist created** — the definitive procedure for deploying a dark Kadence site through the bridge.
+
+## Current mega.management State
+
+- ✅ Homepage live with 5 sections, all rendering correctly
+- ✅ Dark palette applied globally
+- ✅ Logo showing in header with sticky shrink effect
+- ✅ Sticky header stays dark on scroll
+- ✅ Mobile nav visible (white on dark)
+- ✅ Footer shows "© 2026 MEGA"
+- ✅ No white flash during scroll
+- ✅ Text contained at 1290px, backgrounds edge-to-edge
+- ⬜ About page — not yet created
+- ⬜ Contact page — not yet created
+- ⬜ Shop configuration — not yet done
+- ⬜ Blog setup — not yet done
+- ⬜ Legal pages — not yet created
+
+— End of Session 2 addendum.
