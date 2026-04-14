@@ -24,6 +24,12 @@ class MKB_Activator {
 	 * Run on plugin activation.
 	 */
 	public static function activate() {
+		// FIX v1.0.1: Ensure Application Passwords are available.
+		self::ensure_app_passwords_enabled();
+
+		// FIX v1.0.1: Ensure .htaccess passes Authorization header (Hostinger/LiteSpeed).
+		self::ensure_htaccess_auth_passthrough();
+
 		$user_id = self::ensure_bot_user();
 		if ( is_wp_error( $user_id ) ) {
 			deactivate_plugins( plugin_basename( MKB_PLUGIN_FILE ) );
@@ -190,5 +196,86 @@ class MKB_Activator {
 			file_put_contents( MKB_CREDENTIALS_FILE, $json );
 			@chmod( MKB_CREDENTIALS_FILE, 0600 );
 		}
+	}
+
+	/**
+	 * Ensure WordPress Application Passwords are enabled.
+	 *
+	 * Hostinger's "Hostinger Tools" plugin disables Application Passwords by
+	 * default via the `wp_is_application_passwords_available` filter. We
+	 * remove that filter and also check for the option-based toggle.
+	 *
+	 * If we cannot re-enable them programmatically, we die with a clear
+	 * message telling the user what to do.
+	 *
+	 * @since 1.0.1
+	 */
+	private static function ensure_app_passwords_enabled() {
+		// Check if Application Passwords are available.
+		if ( class_exists( 'WP_Application_Passwords' ) && wp_is_application_passwords_available() ) {
+			return; // Already enabled, nothing to do.
+		}
+
+		// Attempt to remove Hostinger Tools' filter that disables app passwords.
+		// Hostinger Tools uses the wp_is_application_passwords_available filter.
+		remove_all_filters( 'wp_is_application_passwords_available' );
+
+		// Also check for the Hostinger Tools option-based toggle.
+		$hostinger_option = get_option( 'hostinger_disable_app_passwords', null );
+		if ( $hostinger_option ) {
+			update_option( 'hostinger_disable_app_passwords', false );
+		}
+
+		// Re-check after our fixes.
+		if ( class_exists( 'WP_Application_Passwords' ) && wp_is_application_passwords_available() ) {
+			return; // Fixed it.
+		}
+
+		// If still not available, die with instructions.
+		wp_die(
+			'<h1>Application Passwords Required</h1>' .
+			'<p>The Mega Kadence Bridge requires WordPress Application Passwords, but they are currently disabled on your site.</p>' .
+			'<p><strong>If you are on Hostinger:</strong> Go to hPanel → WordPress → Tools and turn OFF "Disable application passwords", then reactivate this plugin.</p>' .
+			'<p><strong>If you have a security plugin:</strong> Check its settings for an Application Passwords toggle and enable it.</p>' .
+			'<p>Application Passwords are a WordPress core feature (since WP 5.6) that allows secure API authentication without sharing your main password.</p>',
+			'Mega Kadence Bridge — Application Passwords Required',
+			array( 'back_link' => true, 'response' => 200 )
+		);
+	}
+
+	/**
+	 * Ensure .htaccess passes the Authorization header to PHP.
+	 *
+	 * On Hostinger (LiteSpeed) and many shared hosts, the Authorization
+	 * header is stripped before reaching PHP. We add the CGIPassAuth
+	 * directive to .htaccess using WordPress's insert_with_markers().
+	 *
+	 * @since 1.0.1
+	 */
+	private static function ensure_htaccess_auth_passthrough() {
+		$htaccess_path = ABSPATH . '.htaccess';
+
+		if ( ! file_exists( $htaccess_path ) ) {
+			return; // No .htaccess — likely Nginx or non-Apache server.
+		}
+
+		$contents = file_get_contents( $htaccess_path );
+		if ( false === $contents ) {
+			return; // Can't read.
+		}
+
+		// Check if our directive already exists.
+		if ( false !== strpos( $contents, 'CGIPassAuth On' ) ) {
+			return; // Already present.
+		}
+
+		// Use WordPress's insert_with_markers() for clean, identifiable additions.
+		$lines = array(
+			'# Pass Authorization header to PHP (required for Application Password auth)',
+			'CGIPassAuth On',
+			'SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1',
+		);
+
+		insert_with_markers( $htaccess_path, 'Mega Kadence Bridge', $lines );
 	}
 }
