@@ -1188,3 +1188,93 @@ Full reference: `/home/userjjai/kadence-skill/references/kadence-sop/recipes/dar
 - ⬜ Legal pages — not yet created
 
 — End of Session 2 addendum.
+
+---
+
+# SESSION 2 FINAL: kbVersion Discovery + Site Complete (2026-04-14)
+
+## Gotcha #12: kbVersion:2 (THE Most Critical Discovery)
+
+**This is the single most important thing learned in the entire project.**
+
+Every `kadence/rowlayout` and `kadence/column` block created via the REST API MUST include `"kbVersion":2` in its block comment attributes. Without it, Kadence's PHP renderer falls back to legacy output that generates bare `<div>` elements instead of the proper `kb-row-layout-wrap` + `kt-row-column-wrap` structure. ALL Kadence CSS (max-width, padding, grid, responsive) targets `.kt-row-column-wrap` — so without `kbVersion:2`, no styling applies. Pages render with no padding, no centering, text edge-to-edge.
+
+**How it was discovered:** Homepage worked because the user had clicked "Attempt Recovery" in the editor (which re-saves blocks through Kadence's `save()` function, adding `kbVersion:2`). About and Contact pages were never opened in the editor, so they kept our raw versionless markup. Result: homepage looked great, About/Contact looked broken.
+
+**The fix is one attribute:** `"kbVersion":2` in every row and column block comment.
+
+**This must be in every SOP, every recipe, every template. Non-negotiable.**
+
+## Spacing Standard Locked In
+
+### The Rule of 80-60-40
+- **80px** — first section top padding below header ("the header gap")
+- **60px** — all other section padding top/bottom ("the section gap")
+- **40px** — horizontal padding + mobile vertical ("the breathing room")
+
+### Element Spacing
+- H1: margin 0 top, 20px bottom
+- H2: 10px top, 20px bottom
+- H3: 10px top, 15px bottom
+- Body paragraph: 0 top, 25px bottom
+- CTA button: 30px top margin
+
+## Additional Fixes Applied
+- Removed "Pricing" from primary nav (re-added later — MEGA does need it, but standard student deploys don't)
+- Fixed About page first section: 80px top padding for header breathing room
+- Fixed About page H3 headings: added top margin for breathing from preceding content
+- Fixed Contact page first section: same 80px treatment
+- Added `kbVersion:2` to ALL rows and columns on About + Contact pages
+
+## Total Gotcha Count: 12
+
+The full list (updated from 11):
+1. `logo_layout` must be array, not string
+2. Content background + boxed layout creates white border
+3. Hero `minHeight` with `vh` creates massive gaps
+4. Sticky header defaults to white background
+5. Mobile nav text defaults to black
+6. Footer shows Kadence credit by default
+7. White flash during scroll from wrapper backgrounds
+8. Unicode escapes render as literal text
+9. Homepage needs fullwidth + maxWidth on rows
+10. Block validation "Attempt Recovery" in editor
+11. Kadence palette stored as JSON string
+12. **kbVersion:2 required on every block created via API** (THE critical one)
+
+## mega.management Final State
+
+All pages built and rendering correctly:
+- ✅ Home (5 sections, dark mode, responsive, logo, sticky header)
+- ✅ About (hero + story + 3 values + CTA)
+- ✅ Contact (hero + two-column info + form placeholder)
+- ✅ Blog (posts page configured)
+- ✅ Shop (WooCommerce configured, 4-column grid)
+- ✅ Privacy Policy (published)
+- ✅ Terms of Service (created)
+- ✅ Returns & Refunds (created)
+- ✅ Cart/Checkout/My Account (WooCommerce auto-created)
+
+Nav: About, Blog, Contact, Shop
+Footer: © 2026 MEGA. All rights reserved.
+
+## What's Next
+
+1. **Footer links** — Add Privacy, Terms, Returns links to footer
+2. **fluffy.love** — POD site test (will validate and further refine the deploy process)
+3. **SOPs** — Write Tranche 1 (45 items) in fresh context sessions. The kbVersion:2 discovery and all 12 gotchas become permanent SOP entries.
+4. **v1.0.1 patch** — Auto-fix .htaccess, detect disabled app passwords, fix bridge palette endpoint to use JSON string format
+
+## For Future Claude: Critical Rules Summary
+
+When creating ANY Kadence block via the bridge:
+1. Always include `"kbVersion":2` in rowlayout AND column blocks
+2. Always use actual UTF-8 characters, never `\uXXXX` escapes
+3. Always set `maxWidth:1290` on fullwidth page rows
+4. Always use padding for spacing, never minHeight with vh
+5. First section: 80px top padding. All others: 60px.
+6. Store palette as JSON string with `"active":"palette"` field
+7. Flush cache after every write operation
+8. Set all wrapper/header/footer backgrounds explicitly for dark mode
+
+— End of Session 2 final entry.
