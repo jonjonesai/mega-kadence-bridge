@@ -1278,3 +1278,186 @@ When creating ANY Kadence block via the bridge:
 8. Set all wrapper/header/footer backgrounds explicitly for dark mode
 
 — End of Session 2 final entry.
+
+---
+---
+
+# SESSION 3: Mega Kadence Skill v1.0 — Built, Tested, Shipped (2026-05-01)
+
+**Author of record:** Jon Jones (jonjonesai)
+**Primary Claude session:** Opus 4.6 (1M context), 2026-05-01
+
+## What Happened
+
+Built and shipped the **mega-kadence-skill** repo — Phase A from this DEVLOG. The skill is now a standalone public repo at https://github.com/jonjonesai/mega-kadence-skill containing 22 files that teach Claude how to deploy a fully branded POD store end-to-end.
+
+### Build Brief
+
+Jon provided `mega-skill-build-brief.md` — a self-contained handoff document specifying the target repo structure, what to port from the precursor `mega-stack-skill`, what to rewrite for the MKB v1.0.0 API surface, and what to construct fresh. The brief also specified 5 acceptance criteria and required live testing on cutemerch.love before commit.
+
+### Precursor Ported
+
+Cloned `mega-stack-skill` from GitHub. Ported:
+- SKILL.md change workflow (READ → PLAN → CHANGE → PURGE → VERIFY → REPORT)
+- STUDENT-INTAKE.md 6-question wizard
+- `mega-homepage.php` block markup patterns (converted from PHP eval-file to bridge API calls)
+- `set-palette.php` palette system (converted to bridge `/palette` endpoint)
+- Hostinger gotchas table
+
+All API calls rewritten from old `mega-bridge/v1/` namespace + `X-Mega-Bridge-Key` auth to `mega-kadence-bridge/v1/` + HTTP Basic Auth.
+
+### Files Shipped
+
+```
+mega-kadence-skill/
+├── SKILL.md                        Main skill (what Claude loads)
+├── INTAKE.md                       6-question student intake wizard
+├── deploy-pod-store.md             End-to-end 16-step orchestrator
+├── README.md                       Public-facing intro + install
+├── LICENSE                         GPL v2+
+├── .gitignore
+├── recipes/
+│   ├── deploy-homepage.md          6-section homepage builder
+│   ├── deploy-about.md             About page builder
+│   ├── deploy-contact.md           Contact page with Fluent Forms
+│   ├── deploy-legal-pages.md       Privacy, Terms, Returns
+│   ├── set-palette.md              9-slot palette, light/dark mode
+│   ├── set-fonts-by-tone.md        10 tone-based font pairings
+│   ├── build-nav-menus.md          Header + footer + nav + logo
+│   └── verify-deployment.md        Render-and-grep verification
+├── boilerplate/
+│   ├── privacy-policy.md
+│   ├── terms-of-service.md
+│   ├── returns-and-refunds.md
+│   └── cookie-policy.md
+└── references/
+    ├── mkb-api-reference.md        MKB v1.0.2 endpoint cheat sheet
+    ├── kadence-block-patterns.md   Block markup + save() rules
+    ├── tone-font-pairings.md       10 tone → font matrix
+    └── hostinger-gotchas.md        Hosting-specific fixes
+```
+
+### Bridge v1.0.2 Released
+
+One-line fix: `set_palette()` in `class-theme-endpoints.php` was passing a PHP array to `update_option()`. Kadence's `normalize_palette_option` filter calls `json_decode()` on the value, expecting a string. Fix: `wp_json_encode($palette)` before storing.
+
+Tagged v1.0.2, pushed to GitHub. GitHub Actions built the release ZIP. Updated cutemerch.love via SCP.
+
+### cutemerch.love Deployed
+
+Full end-to-end deployment tested on cutemerch.love (production site). Brand: CuteMerch, niche: cute animal illustrations, light mode, #FF1493 hot pink, Fraunces/Nunito fonts.
+
+**Final site state:**
+
+| Element | Details |
+|---|---|
+| Header | Placeholder logo (450x150 PNG) left, nav right (About / Contact / Shop), transparent on Home/About/Contact, solid on Shop/Legal, sticky on scroll |
+| Homepage | 6 sections: Hero → Trust Row (3 cols) → Brand Story (2-col) → Featured Products (Kadence productcarousel, 4 placeholder products) → CTA Band → Newsletter (Fluent Forms) |
+| About | Hero → Brand Story (2-col) → 3 Values → CTA |
+| Contact | Hero → 2-col (info + Fluent Forms contact form) → CTA |
+| Legal | Privacy Policy, Terms of Service, Returns & Refunds |
+| Footer | 2-column: brand + tagline + copyright (left), legal nav links in accent color (right) |
+| Mobile | popup-toggle hamburger (pink bg, white icon), white drawer with dark nav text |
+| Products | 4 placeholders: "Sample Tee/Hoodie/Mug/Tote -- Replace with MEGA" |
+| Block validity | 0 "Attempt Block Recovery" warnings on all pages |
+
+## Gotchas Discovered (Session 3) — Total: 21
+
+Adding to the 12 from Session 2:
+
+### 13. `/palette` endpoint must wp_json_encode() before storing
+Kadence's `normalize_palette_option` filter on `kadence_global_palette` calls `json_decode()`. The bridge was passing a PHP array directly to `update_option()`, causing a TypeError crash. Fixed in bridge v1.0.2.
+
+### 14. `/pages/ensure` doesn't publish existing draft pages
+WordPress auto-creates a Privacy Policy page as a draft. `/pages/ensure` finds it by slug and returns it without updating status. Always follow `/pages/ensure` with `POST /posts/{id}` setting `status: publish`.
+
+### 15. Product create field names differ from WC REST API
+Bridge uses `name` (not `title`), `categories` as flat array `[16]` (not `[{"id":16}]`), and doesn't support `featured` flag. Set featured via `POST /posts/{id}` with `meta: {"_featured":"yes"}` after creation.
+
+### 16. `header_desktop_items` keys need row prefixes
+Kadence checks `$elements[$row][$row . '_' . $column]` — so `main_left`, `main_right`, NOT `left`, `right`. Using bare direction names renders an empty header.
+
+### 17. `footer_items` keys need row prefixes
+Same pattern: `middle_1`, `middle_2`, `bottom_1`, NOT `1`, `2`, `3`. Using bare numbers renders an empty footer.
+
+### 18. `logo_layout` is an object, not an array
+Must be `{"include":{"desktop":"logo"},"layout":{"desktop":"standard"}}`. Setting `["logo_only"]` silently fails — logo area renders with an empty `<a>` tag, no image.
+
+### 19. Mobile header component names differ from desktop
+The hamburger trigger is `popup-toggle` (NOT `mobile-trigger`). The mobile logo is `mobile-logo` (NOT `logo`). The popup nav is `mobile-navigation` (NOT `navigation`). These map directly to template filenames in `template-parts/header/`.
+
+### 20. `kadence/infobox` save() is too complex to reproduce from API
+The save.js generates complex HTML with icon SVGs, RichText content, and specific class patterns. Reproducing this exactly from API-created content is fragile. Use `kadence/advancedheading` + `wp:paragraph` blocks inside columns instead — these are simpler to match and produce identical results.
+
+### 21. `kadence/advancedheading` requires `data-kb-block` attribute
+The save() output includes `data-kb-block="kb-adv-heading${uniqueID}"` on the HTML element. Missing this attribute causes block validation failure ("Attempt Block Recovery" prompt in editor). Column blocks require `class="wp-block-kadence-column kadence-column${uniqueID}"` — NOT `inner-column-1`.
+
+## Key Architecture Decisions
+
+### Block validity strategy
+All Kadence blocks used in the skill fall into two categories:
+- **Dynamic blocks** (PHP-rendered): `kadence/rowlayout`, `kadence/singlebtn`, `kadence/infobox`, `kadence/productcarousel`. Inner HTML is ignored by WordPress validation. Can use empty inner HTML: `<!-- /wp:kadence/singlebtn -->`.
+- **Static blocks** (save.js validated): `kadence/column`, `kadence/advancedheading`, `kadence/advancedbtn`, `wp:paragraph`. Inner HTML MUST match save() output exactly.
+
+The skill avoids `kadence/infobox` entirely for API-created content (gotcha #20) and uses `kadence/advancedheading` + `wp:paragraph` instead.
+
+### Product display
+Requires Kadence Blocks Pro. The `kadence/productcarousel` block is dynamic (PHP-rendered, no block recovery issues) and supports featured product filtering. The WooCommerce core `woocommerce/product-collection` block also works but has more complex markup requirements.
+
+### Forms
+Uses Fluent Forms (free plugin). Two forms created during deploy: Subscription Form (ID varies per site) for the homepage newsletter row, Contact Form for the contact page. Embedded via `<!-- wp:shortcode -->[fluentform id="X"]<!-- /wp:shortcode -->`.
+
+## Plugin Requirements (Updated)
+
+| Plugin | Required | Notes |
+|---|---|---|
+| Kadence Theme (free) | Yes | Base theme |
+| Kadence Theme Pro | Recommended | Transparent header, header/footer builder features |
+| Kadence Blocks (free) | Yes | Core blocks: rowlayout, column, advancedheading, advancedbtn, singlebtn |
+| Kadence Blocks Pro | Yes | `kadence/productcarousel` for Featured Products section |
+| WooCommerce | Yes | Products, shop page, cart |
+| Mega Kadence Bridge | Yes | v1.0.2+ (palette fix) |
+| Fluent Forms | Yes | Newsletter + contact forms |
+| LiteSpeed Cache | Yes | Cache management on Hostinger |
+
+## For Future Claude: Updated Critical Rules
+
+When creating ANY page via the bridge:
+
+1. Always include `"kbVersion":2` in rowlayout AND column blocks
+2. Always use actual UTF-8 characters, never `\uXXXX` escapes
+3. Always set `maxWidth:1290` on fullwidth page rows
+4. Always use padding arrays for spacing: `"padding":["80","60","60","60"]`
+5. First section: 80px top padding. All others: 60px.
+6. Store palette as JSON string via `/palette` endpoint (bridge v1.0.2+ handles encoding)
+7. Flush cache after every write operation
+8. Column class MUST be `kadence-column${uniqueID}` — no `inner-column-N`
+9. Headings MUST include `data-kb-block="kb-adv-heading${uniqueID}"`
+10. Header items: `main_left`, `main_right` — NOT `left`, `right`
+11. Footer items: `middle_1`, `middle_2` — NOT `1`, `2`
+12. Logo layout: `{"include":{"desktop":"logo"},"layout":{"desktop":"standard"}}` — NOT array
+13. Mobile trigger: `popup-toggle` — NOT `mobile-trigger`
+14. Mobile logo: `mobile-logo` — NOT `logo`
+15. Mobile popup nav: `mobile-navigation` — NOT `navigation`
+16. Never use `kadence/infobox` from API — use heading + paragraph blocks
+17. Always `POST /posts/{id}` with `status:publish` after `/pages/ensure` (draft pages)
+18. Products: `name` not `title`, flat category array, set `_featured` via separate meta call
+
+## Session 3 Status
+
+- ✅ Mega Kadence Skill v1.0 shipped to https://github.com/jonjonesai/mega-kadence-skill
+- ✅ Bridge v1.0.2 shipped (palette fix)
+- ✅ cutemerch.love fully deployed — 7 pages, header, footer, products, forms
+- ✅ All 5 acceptance criteria pass
+- ✅ Zero block recovery warnings
+- ⬜ Reproducibility test (wipe + rebuild from skill) — NEXT
+- ⬜ Update skill files in mega-kadence-skill repo with session 3 discoveries
+- ⬜ Tranche 2/3 SOPs — future sessions
+
+## What's Next
+
+**Reproducibility test:** Wipe cutemerch.love content (pages, products, categories, menus, theme mods). Then have a fresh Claude instance read the skill and deploy the same site. If the result matches, the skill is proven. If it doesn't, the gap becomes the next fix.
+
+After that: course filming on cutemerch.love, then student rollout.
+
+— End of Session 3 dev log.
