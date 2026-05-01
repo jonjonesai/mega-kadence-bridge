@@ -260,9 +260,10 @@ class MKB_Theme_Endpoints {
 			return MKB_REST_Controller::error( 'invalid_palette', 'palette must be an array.', 400 );
 		}
 
-		$previous = get_option( 'kadence_global_palette' );
-		update_option( 'kadence_global_palette', $palette );
-		set_theme_mod( 'kadence_global_palette', $palette );
+		$previous       = get_option( 'kadence_global_palette' );
+		$palette_string = wp_json_encode( $palette );
+		update_option( 'kadence_global_palette', $palette_string );
+		set_theme_mod( 'kadence_global_palette', $palette_string );
 
 		$snapshot_id = MKB_History::record( 'palette_set', 'kadence_global_palette', $previous, $palette );
 
