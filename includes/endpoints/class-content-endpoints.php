@@ -9,6 +9,7 @@
  *   POST /posts/create                 create new post/page
  *   GET  /posts/find?slug=...          find post by slug (idempotency helper)
  *   POST /pages/ensure                 create page if it doesn't exist, return existing if it does
+ *   POST /posts/{id}/normalize-blocks  re-serialize blocks to eliminate editor recovery prompts
  *   GET  /menus                        list nav menus
  *   POST /menus/create                 create new menu
  *   POST /menus/{id}                   update menu
@@ -92,6 +93,17 @@ class MKB_Content_Endpoints {
 					'callback'            => array( __CLASS__, 'update_post' ),
 					'permission_callback' => $permission,
 				),
+			)
+		);
+
+		// POST /posts/{id}/normalize-blocks
+		register_rest_route(
+			$ns,
+			'/posts/(?P<id>\d+)/normalize-blocks',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'normalize_blocks' ),
+				'permission_callback' => $permission,
 			)
 		);
 
@@ -503,6 +515,59 @@ class MKB_Content_Endpoints {
 			array(
 				'id'      => $item_id,
 				'menu_id' => $menu_id,
+			)
+		);
+	}
+
+	/**
+	 * POST /posts/{id}/normalize-blocks
+	 *
+	 * Re-serializes block content through WordPress's block parser.
+	 * This roundtrip (parse_blocks → serialize_blocks) normalizes the
+	 * saved markup to match what the block editor's save() functions
+	 * would produce, eliminating "Block contains invalid content"
+	 * / "Attempt Block Recovery" prompts in wp-admin.
+	 */
+	public static function normalize_blocks( $request ) {
+		$id   = (int) $request->get_param( 'id' );
+		$post = get_post( $id );
+
+		if ( ! $post ) {
+			return MKB_REST_Controller::error( 'not_found', 'Post not found.', 404 );
+		}
+
+		$original = $post->post_content;
+
+		if ( empty( $original ) ) {
+			return MKB_REST_Controller::error( 'empty_content', 'Post has no content to normalize.', 400 );
+		}
+
+		$blocks     = parse_blocks( $original );
+		$normalized = serialize_blocks( $blocks );
+
+		if ( $normalized === $original ) {
+			return MKB_REST_Controller::success(
+				array(
+					'id'      => $id,
+					'changed' => false,
+					'message' => 'Content already normalized.',
+				)
+			);
+		}
+
+		wp_update_post(
+			array(
+				'ID'           => $id,
+				'post_content' => $normalized,
+			)
+		);
+
+		return MKB_REST_Controller::success(
+			array(
+				'id'              => $id,
+				'changed'         => true,
+				'original_length' => strlen( $original ),
+				'new_length'      => strlen( $normalized ),
 			)
 		);
 	}
