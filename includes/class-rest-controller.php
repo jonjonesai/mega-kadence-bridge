@@ -48,6 +48,9 @@ class MKB_REST_Controller {
 
 		// History / snapshot / rollback endpoints.
 		MKB_History_Endpoints::register( $ns );
+
+		// Plugin install / activate / list endpoints.
+		MKB_Plugin_Endpoints::register( $ns );
 	}
 
 	/**
