@@ -1,5 +1,82 @@
 # Dev Log — Mega Kadence Bridge & Kadence Skill Project
 
+---
+
+## Session 5 — 2026-05-09 (v1.2.0: Novamira-inspired hardening + thesis broadening)
+
+**Branch:** main (1 commit ahead of origin pre-session). New work uncommitted.
+**Trigger:** Strategic readout on novamira.ai (use-novamira/novamira on GitHub) revealed nine portable patterns. Jon authorized integration of relevant ones and broadened MKB's positioning from "AI-built POD stores" to "AI mastery of Kadence, full stop — POD stores are one application."
+
+### What Novamira is, in one sentence
+
+A WP plugin (~6k lines) that registers ten abilities on the WordPress Abilities API + MCP Adapter — nine raw primitives (PHP eval, file CRUD, list-directory, upload-link) plus a discovery tool. Stack-agnostic by design. Their Kadence "support" is marketing — the repo contains zero Kadence code; the agent figures Kadence out from PHP eval + filesystem.
+
+That's the inverse of MKB's bet. MKB encodes Kadence-fluent operations as opinionated REST endpoints. Different layer entirely. Novamira is a primitives substrate; MKB is a Kadence vocabulary.
+
+### Ports landed in v1.2.0
+
+1. **Domain-locking** (`MKB_LOCKED_DOMAIN_OPTION`, `MKB_Activator::lock_to_current_domain`, `MKB_REST_Controller::check_domain_lock`). On activation MKB records the site host. Every REST request checks the host matches; mismatch returns `403 mkb_domain_mismatch` with locked/current values in the error data so the agent (or operator) sees exactly what happened. Pre-1.2.0 installs with no lock recorded fail open and adopt the current domain on next activation cycle. Direct port of Novamira's `helpers.php:189-223` pattern, adapted for REST instead of MCP.
+
+2. **`/capabilities` discovery endpoint** (`includes/endpoints/class-capabilities-endpoints.php`). Modeled after Novamira's `discover-abilities` override. Returns:
+   - `bridge`: MKB version, namespace, lock state.
+   - `site`: name, URLs, WP/PHP version, locale, timezone, HTTPS, multisite.
+   - `stack`: theme detection (Kadence + child-theme aware), Kadence Blocks/Pro/Blocks-Pro/Starter/Conversions/Woo-Extras, Iconic, WooCommerce, ACF/ACF Pro, WPML/Polylang/TranslatePress, Yoast/RankMath. Each present plugin returns file/name/version/active.
+   - `multilingual`: detected translation system + language codes.
+   - `endpoints`: hand-curated, agent-readable inventory grouped by category (discovery / theme_identity / kadence / content / media / commerce / plugins / cache / reversibility). Commerce hidden when Woo inactive.
+   - `kadence_instructions`: the operating doctrine (see #3).
+
+3. **Kadence-mastery operating instructions** (`includes/class-instructions.php`, returned via `MKB_Instructions::build()`, filterable through `mkb_kadence_instructions`). Ten doctrines:
+   1. Discover before you act.
+   2. Identity lives in tokens, not HTML (palette, theme_mods over inline CSS).
+   3. Layout lives in Kadence Blocks (no raw HTML where a block exists).
+   4. Headers/footers/global elements use Kadence builders, not template forks.
+   5. Per-page overrides use `_kad_*` post meta.
+   6. Content models use WordPress-native primitives (CPT, taxonomies, ACF, Woo).
+   7. Performance is a feature — `/cache/flush` after changes; `/render` to verify.
+   8. Reversibility is your safety net — capture history-id before multi-step changes.
+   9. Plugin awareness — branch on what `/capabilities` reports.
+   10. What MKB is and is not — REST surface for Kadence, NOT arbitrary PHP eval (intentional non-goal). If a needed primitive isn't present, name the gap.
+
+   This is the most strategically valuable port. It's how MKB teaches every AI agent — not just Claude — how to drive Kadence correctly without each operator having to re-explain the doctrine.
+
+### Ports deferred (with reason)
+
+- **MCP-result unwrap shim** — N/A. MKB is direct REST + WP_Error, not MCP-Adapter-wrapped. The `WP_Error` envelope already produces correct HTTP status codes. The *spirit* (embed actionable detail for self-correction) is a refactor opportunity tracked under "per-property error specificity audit" — separate punch list, not this PR.
+- **Sandbox + crash-recovery loader** — N/A. MKB does not write arbitrary PHP to the site. If MKB ever grows mu-plugin/theme-functions write capability, port it then.
+- **Empty-properties JSON-Schema patch** — N/A unless MKB adopts JSON Schema validation on inputs. Defer.
+- **App-Passwords three-state taxonomy** — already covered by `MKB_Activator::ensure_app_passwords_enabled()` at activation time. No runtime endpoint needed today.
+- **MCP server name = site domain** — N/A, MKB is not MCP.
+- **Mago / strict_types / static analysis hygiene** — separate hardening pass, scope before contractor lands. Tracked under MEGA release safety stack memory.
+
+### Files changed
+
+- `mega-kadence-bridge.php` — version bump 1.1.0 → 1.2.0, broadened Description, added `MKB_LOCKED_DOMAIN_OPTION` constant, required new `class-instructions.php` and `class-capabilities-endpoints.php`.
+- `includes/class-activator.php` — added `lock_to_current_domain()` and call from `activate()`.
+- `includes/class-rest-controller.php` — added `check_domain_lock()`, called from `check_permission()`; registered new capabilities endpoint.
+- `includes/class-instructions.php` — NEW. Kadence-mastery doctrine string, filterable.
+- `includes/endpoints/class-capabilities-endpoints.php` — NEW. `/capabilities` discovery endpoint.
+- `uninstall.php` — clean up `mkb_locked_domain` option.
+- `README.md` — broadened lede beyond POD; added `/capabilities` to API table; added Domain Locking section under Security.
+
+### Strategic delineation locked this session
+
+- **MKB** = the Kadence vocabulary. Stack-specific, outcome-agnostic. The substrate every "Drop" skill consumes. This is the moat.
+- **Store Drop skill** (currently `mega-kadence-skill`, rename pending) = ONE outcome (7-page POD store) built on MKB. The first proof, not the only product.
+- Future Drop skills (Editorial / Portfolio / Course / Local-Service / Charity) compose on the same MKB. Investment in MKB depth compounds across all of them.
+- Skill rename to `store-drop-skill` (or similar) authorized 2026-05-09. Tracked in next-session work.
+
+### Untouched but worth noting
+
+- `class-core-endpoints.php` registers a `POST /wp-eval` route. Kept as-is for this session; flagged for review — its existence is in tension with doctrine #10. Decision: keep as expert escape hatch but consider gating behind an explicit `mkb_enable_eval` option (off by default) in v1.3.
+
+### Verification still owed
+
+- Activate v1.2.0 on a test Hostinger site, hit `/capabilities` with the bot creds, confirm payload shape and instructions string render.
+- Restore a snapshot to a different domain, confirm `mkb_domain_mismatch` fires with the right locked/current values.
+- Confirm pre-1.2.0 → 1.2.0 upgrade path: existing site has no `mkb_locked_domain` option; first authenticated request should succeed (fail-open); next activation cycle should record the domain.
+
+
+
 > A comprehensive hand-off document. If you are a future Claude instance picking up this project and you have no prior context, read this file end-to-end before doing anything else. It contains the mission, decisions, architecture, build history, and next steps.
 
 **Session 1:** 2026-04-11 (foundation)

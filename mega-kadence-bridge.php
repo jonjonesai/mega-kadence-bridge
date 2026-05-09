@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Mega Kadence Bridge
  * Plugin URI:        https://github.com/jonjonesai/mega-kadence-bridge
- * Description:       REST API bridge that lets Claude (via Claude Code CLI) operate a WordPress site running Kadence Theme, Kadence Blocks, and WooCommerce. Installs a dedicated claude-bot user with an Application Password and exposes endpoints for theme mods, content, palette, CSS, cache, and commerce operations.
- * Version:           1.1.0
+ * Description:       REST API bridge that lets an AI agent (Claude, Cursor, any client) become a master of Kadence on this WordPress site. Exposes Kadence-fluent endpoints for theme mods, palette, blocks, header/footer, content, media, WooCommerce, plugins, and history — plus a /capabilities discovery endpoint that teaches the agent how to operate Kadence correctly. POD stores are one application; any Kadence site is in scope.
+ * Version:           1.2.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Jon Jones AI
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants.
-define( 'MKB_VERSION', '1.1.0' );
+define( 'MKB_VERSION', '1.2.0' );
 define( 'MKB_PLUGIN_FILE', __FILE__ );
 define( 'MKB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MKB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -31,6 +31,7 @@ define( 'MKB_BOT_USERNAME', 'claude-bot' );
 define( 'MKB_APP_PASSWORD_NAME', 'Mega Kadence Bridge' );
 define( 'MKB_CREDENTIALS_DIR', WP_CONTENT_DIR . '/.claude-bridge' );
 define( 'MKB_CREDENTIALS_FILE', MKB_CREDENTIALS_DIR . '/credentials.json' );
+define( 'MKB_LOCKED_DOMAIN_OPTION', 'mkb_locked_domain' );
 
 // Autoload plugin classes.
 require_once MKB_PLUGIN_DIR . 'includes/class-plugin.php';
@@ -38,7 +39,9 @@ require_once MKB_PLUGIN_DIR . 'includes/class-activator.php';
 require_once MKB_PLUGIN_DIR . 'includes/class-deactivator.php';
 require_once MKB_PLUGIN_DIR . 'includes/class-history.php';
 require_once MKB_PLUGIN_DIR . 'includes/class-admin-page.php';
+require_once MKB_PLUGIN_DIR . 'includes/class-instructions.php';
 require_once MKB_PLUGIN_DIR . 'includes/class-rest-controller.php';
+require_once MKB_PLUGIN_DIR . 'includes/endpoints/class-capabilities-endpoints.php';
 require_once MKB_PLUGIN_DIR . 'includes/endpoints/class-core-endpoints.php';
 require_once MKB_PLUGIN_DIR . 'includes/endpoints/class-theme-endpoints.php';
 require_once MKB_PLUGIN_DIR . 'includes/endpoints/class-content-endpoints.php';

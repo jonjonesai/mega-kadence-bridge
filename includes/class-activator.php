@@ -53,11 +53,33 @@ class MKB_Activator {
 		self::store_credentials( $credentials );
 		self::write_credentials_file( $credentials );
 
+		// Lock the bridge to the current domain. If the site URL changes (e.g.
+		// a Hostinger snapshot is restored to staging, or the domain is moved),
+		// REST calls will return mkb_domain_mismatch until the operator
+		// re-locks via the admin page. This prevents an old credentials file
+		// from working against a different site silently.
+		self::lock_to_current_domain();
+
 		// Flush rewrite rules so REST routes are available immediately.
 		flush_rewrite_rules();
 
 		// Mark activation complete so the admin page can show a welcome notice.
 		update_option( 'mkb_activation_completed', time() );
+	}
+
+	/**
+	 * Record the current site host as the locked domain.
+	 *
+	 * Called on activation and from the admin page's "Re-lock" action when an
+	 * operator intentionally moves the site.
+	 *
+	 * @since 1.2.0
+	 */
+	public static function lock_to_current_domain() {
+		$host = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( is_string( $host ) && '' !== $host ) {
+			update_option( MKB_LOCKED_DOMAIN_OPTION, $host );
+		}
 	}
 
 	/**

@@ -25,6 +25,7 @@ delete_option( 'mkb_bot_user_id' );
 delete_option( 'mkb_credentials' );
 delete_option( 'mkb_activation_completed' );
 delete_option( 'mkb_history' );
+delete_option( 'mkb_locked_domain' );
 
 // Remove the credentials directory and its contents.
 $credentials_dir = WP_CONTENT_DIR . '/.claude-bridge';
