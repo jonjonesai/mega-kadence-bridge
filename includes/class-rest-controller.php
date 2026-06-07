@@ -21,40 +21,98 @@ if ( ! defined( 'ABSPATH' ) ) {
 class MKB_REST_Controller {
 
 	/**
+	 * Endpoint classes that should be registered, in order.
+	 *
+	 * Each is wrapped in a class_exists() guard at registration time so that a
+	 * single missing or corrupted endpoint file degrades MKB to a partial state
+	 * instead of killing the entire WP REST stack with a fatal. A missing class
+	 * is logged and surfaced via an admin notice; other endpoints still register.
+	 *
+	 * @since 1.2.1
+	 * @var array<string,string> Map of class name => human label for logs/notices.
+	 */
+	private static $endpoint_classes = array(
+		'MKB_Capabilities_Endpoints' => 'capabilities',
+		'MKB_Core_Endpoints'         => 'core',
+		'MKB_Theme_Endpoints'        => 'theme',
+		'MKB_Content_Endpoints'      => 'content',
+		'MKB_Media_Endpoints'        => 'media',
+		'MKB_Kadence_Endpoints'      => 'kadence',
+		'MKB_History_Endpoints'      => 'history',
+		'MKB_Plugin_Endpoints'       => 'plugin',
+	);
+
+	/**
+	 * Endpoint classes that failed their class_exists() check this request.
+	 *
+	 * Populated by register_routes() and read by the admin-notice hook so the
+	 * site operator sees which endpoint files need re-uploading.
+	 *
+	 * @since 1.2.1
+	 * @var string[]
+	 */
+	private static $missing_endpoints = array();
+
+	/**
 	 * Register all routes.
+	 *
+	 * Hardened against partial-install corruption: if any endpoint class is
+	 * missing (e.g. host auto-updater truncated a file, OPcache evicted a
+	 * compiled copy, GitHub release zip was incomplete), that endpoint is
+	 * skipped and recorded. The rest of the REST stack — including unrelated
+	 * plugins' endpoints — continues to register cleanly.
 	 */
 	public static function register_routes() {
 		$ns = MKB_REST_NAMESPACE;
 
-		// Capabilities discovery (the canonical first call from any AI agent —
-		// returns site context, Kadence stack inventory, and operating doctrine).
-		MKB_Capabilities_Endpoints::register( $ns );
-
-		// Core endpoints.
-		MKB_Core_Endpoints::register( $ns );
-
-		// Theme customization endpoints.
-		MKB_Theme_Endpoints::register( $ns );
-
-		// Content (posts, pages) endpoints.
-		MKB_Content_Endpoints::register( $ns );
-
-		// Media endpoints.
-		MKB_Media_Endpoints::register( $ns );
-
-		// Kadence-specific endpoints (blocks, Pro config).
-		MKB_Kadence_Endpoints::register( $ns );
-
-		// WooCommerce endpoints (registered only if WC is active).
-		if ( class_exists( 'WooCommerce' ) ) {
-			MKB_Woo_Endpoints::register( $ns );
+		foreach ( self::$endpoint_classes as $class => $label ) {
+			if ( ! class_exists( $class ) ) {
+				self::$missing_endpoints[] = $label;
+				error_log(
+					sprintf(
+						'[mega-kadence-bridge] Endpoint class %s not loaded — %s routes skipped. Reinstall the plugin or restore includes/endpoints/.',
+						$class,
+						$label
+					)
+				);
+				continue;
+			}
+			call_user_func( array( $class, 'register' ), $ns );
 		}
 
-		// History / snapshot / rollback endpoints.
-		MKB_History_Endpoints::register( $ns );
+		// WooCommerce endpoints — only when WC is active AND the class loaded.
+		if ( class_exists( 'WooCommerce' ) ) {
+			if ( class_exists( 'MKB_Woo_Endpoints' ) ) {
+				MKB_Woo_Endpoints::register( $ns );
+			} else {
+				self::$missing_endpoints[] = 'woo';
+				error_log(
+					'[mega-kadence-bridge] Endpoint class MKB_Woo_Endpoints not loaded — woo routes skipped. Reinstall the plugin or restore includes/endpoints/.'
+				);
+			}
+		}
+	}
 
-		// Plugin install / activate / list endpoints.
-		MKB_Plugin_Endpoints::register( $ns );
+	/**
+	 * Admin-notice hook — surface missing endpoint classes to the site operator
+	 * so a partial corruption doesn't sit silent. Hooked in class-plugin.php.
+	 *
+	 * @since 1.2.1
+	 */
+	public static function maybe_render_missing_endpoint_notice() {
+		if ( empty( self::$missing_endpoints ) ) {
+			return;
+		}
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		printf(
+			'<div class="notice notice-error"><p><strong>%s</strong> %s <code>%s</code>. %s</p></div>',
+			esc_html__( 'Mega Kadence Bridge:', 'mega-kadence-bridge' ),
+			esc_html__( 'Some endpoint files are missing or corrupted —', 'mega-kadence-bridge' ),
+			esc_html( implode( ', ', self::$missing_endpoints ) ),
+			esc_html__( 'Reinstall the plugin from GitHub to restore full functionality. Other REST endpoints on this site are unaffected.', 'mega-kadence-bridge' )
+		);
 	}
 
 	/**

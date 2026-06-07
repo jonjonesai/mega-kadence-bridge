@@ -43,6 +43,10 @@ final class MKB_Plugin {
 		// Register REST routes.
 		add_action( 'rest_api_init', array( 'MKB_REST_Controller', 'register_routes' ) );
 
+		// Surface missing-endpoint-file corruption in the admin so a partial
+		// install doesn't sit silent.
+		add_action( 'admin_notices', array( 'MKB_REST_Controller', 'maybe_render_missing_endpoint_notice' ) );
+
 		// Register the Settings page.
 		if ( is_admin() ) {
 			MKB_Admin_Page::init();
