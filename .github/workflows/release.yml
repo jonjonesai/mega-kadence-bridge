@@ -44,6 +44,22 @@ jobs:
           rm puc.zip
           echo "Plugin-update-checker library installed"
 
+      - name: Download Parsedown dependency
+        run: |
+          # PUC's GitHubApi.php calls Parsedown::instance()->text($release->body)
+          # whenever a release body is non-empty. Parsedown is declared in PUC's
+          # composer.json suggests/dev-deps but is NOT in the source tarball, so
+          # any non-empty release notes fatal customer sites with "Class Parsedown
+          # not found." We bundle it explicitly. MIT-licensed, single file, pinned
+          # to v1.7.4 (the canonical stable release).
+          curl -sL https://github.com/erusev/parsedown/raw/1.7.4/Parsedown.php \
+            -o includes/lib/Parsedown.php
+          curl -sL https://github.com/erusev/parsedown/raw/1.7.4/LICENSE.txt \
+            -o includes/lib/Parsedown-LICENSE.txt
+          # Sanity check: file exists and declares the class.
+          grep -q "class Parsedown" includes/lib/Parsedown.php
+          echo "Parsedown bundled at includes/lib/Parsedown.php"
+
       - name: Build release ZIP
         run: |
           # Create a clean staging directory

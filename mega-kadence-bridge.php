@@ -3,7 +3,7 @@
  * Plugin Name:       Mega Kadence Bridge
  * Plugin URI:        https://github.com/jonjonesai/mega-kadence-bridge
  * Description:       REST API bridge that lets an AI agent (Claude, Cursor, any client) become a master of Kadence on this WordPress site. Exposes Kadence-fluent endpoints for theme mods, palette, blocks, header/footer, content, media, WooCommerce, plugins, and history — plus a /capabilities discovery endpoint that teaches the agent how to operate Kadence correctly. POD stores are one application; any Kadence site is in scope.
- * Version:           1.2.1
+ * Version:           1.2.2
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Jon Jones AI
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants.
-define( 'MKB_VERSION', '1.2.1' );
+define( 'MKB_VERSION', '1.2.2' );
 define( 'MKB_PLUGIN_FILE', __FILE__ );
 define( 'MKB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MKB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -82,6 +82,19 @@ add_action(
 );
 
 // Initialize plugin-update-checker for GitHub releases, if bundled.
+//
+// PUC's GitHubApi.php (v5p6 line 145) calls Parsedown::instance()->text() on
+// any non-empty release body. Parsedown is not declared in PUC's composer
+// requires and ships separately, so we bundle it ourselves under
+// includes/lib/Parsedown.php and load it here before PUC initializes. Without
+// this, a release with a non-empty body fatals every install via the PUC
+// scheduled update check ("Class Parsedown not found"). The file_exists guard
+// makes the load defensive for any future install where the file is absent.
+$mkb_parsedown = MKB_PLUGIN_DIR . 'includes/lib/Parsedown.php';
+if ( ! class_exists( 'Parsedown' ) && file_exists( $mkb_parsedown ) ) {
+	require_once $mkb_parsedown;
+}
+
 $puc_init = MKB_PLUGIN_DIR . 'includes/lib/plugin-update-checker/plugin-update-checker.php';
 if ( file_exists( $puc_init ) ) {
 	require_once $puc_init;
