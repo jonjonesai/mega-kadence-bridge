@@ -90,6 +90,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: mega-kadence-bridge.zip
-          generate_release_notes: true
+          # Body MUST stay empty: PUC's GitHubApi runs Parsedown on any non-empty
+          # release body, which fatals installs still on <=1.2.1 (no bundled
+          # Parsedown). This crashed mega.management on 2026-06-08. Keep empty.
+          generate_release_notes: false
+          body: ""
           draft: false
           prerelease: false

@@ -204,6 +204,85 @@ class MKB_Content_Endpoints {
 		);
 	}
 
+	/**
+	 * Sanitize Kadence block content before persisting.
+	 *
+	 * Guards against two Kadence Blocks 3.7+ editor crashes that hand-authored
+	 * markup commonly triggers ("This block has encountered an error and cannot
+	 * be previewed"):
+	 *
+	 *   1. A literal null where a color/style string is expected (e.g.
+	 *      advancedheading markBorderStyles top color = null). 3.6.x tolerated
+	 *      it; 3.7.x calls string ops on it and throws. -> coerce null to ''.
+	 *   2. A color attribute (color/background) set WITHOUT its companion
+	 *      *ColorClass attribute. The editor calls .includes() on the missing
+	 *      class (undefined) and throws. -> backfill the companion class to ''.
+	 *
+	 * Inner HTML is untouched, so block validation and parse round-trip are
+	 * unaffected; the colors still render via the inline style rule.
+	 *
+	 * @param string $content Raw block markup.
+	 * @return string Sanitized block markup.
+	 */
+	private static function sanitize_block_content( $content ) {
+		if ( ! is_string( $content ) || '' === $content ) {
+			return $content;
+		}
+		if ( false === strpos( $content, 'null' ) && false === strpos( $content, 'kadence/advancedheading' ) ) {
+			return $content;
+		}
+		$blocks = self::sanitize_block_attrs( parse_blocks( $content ) );
+		return serialize_blocks( $blocks );
+	}
+
+	/**
+	 * Recursively sanitize block attributes across a parsed block tree:
+	 * coerce null -> '' everywhere, and backfill missing Kadence color classes.
+	 *
+	 * @param array $blocks Parsed blocks.
+	 * @return array
+	 */
+	private static function sanitize_block_attrs( $blocks ) {
+		foreach ( $blocks as &$block ) {
+			if ( ! empty( $block['attrs'] ) && is_array( $block['attrs'] ) ) {
+				$block['attrs'] = self::denull( $block['attrs'] );
+
+				if ( isset( $block['blockName'] ) && 'kadence/advancedheading' === $block['blockName'] ) {
+					$a = $block['attrs'];
+					if ( isset( $a['color'] ) && '' !== $a['color'] && ! isset( $a['colorClass'] ) ) {
+						$a['colorClass'] = '';
+					}
+					if ( isset( $a['background'] ) && '' !== $a['background'] && ! isset( $a['backgroundColorClass'] ) ) {
+						$a['backgroundColorClass'] = '';
+					}
+					$block['attrs'] = $a;
+				}
+			}
+			if ( ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
+				$block['innerBlocks'] = self::sanitize_block_attrs( $block['innerBlocks'] );
+			}
+		}
+		unset( $block );
+		return $blocks;
+	}
+
+	/**
+	 * Recursively coerce null to '' within an attribute value.
+	 *
+	 * @param mixed $value Attribute value.
+	 * @return mixed
+	 */
+	private static function denull( $value ) {
+		if ( is_array( $value ) ) {
+			$out = array();
+			foreach ( $value as $k => $v ) {
+				$out[ $k ] = is_null( $v ) ? '' : self::denull( $v );
+			}
+			return $out;
+		}
+		return $value;
+	}
+
 	public static function update_post( $request ) {
 		$id   = (int) $request->get_param( 'id' );
 		$body = $request->get_json_params();
@@ -229,7 +308,7 @@ class MKB_Content_Endpoints {
 			$changed[]                 = 'title';
 		}
 		if ( isset( $body['content'] ) ) {
-			$update_data['post_content'] = $body['content'];
+			$update_data['post_content'] = self::sanitize_block_content( $body['content'] );
 			$changed[]                   = 'content';
 		}
 		if ( isset( $body['excerpt'] ) ) {
@@ -272,7 +351,7 @@ class MKB_Content_Endpoints {
 
 		$post_data = array(
 			'post_title'   => isset( $body['title'] ) ? $body['title'] : '',
-			'post_content' => isset( $body['content'] ) ? $body['content'] : '',
+			'post_content' => isset( $body['content'] ) ? self::sanitize_block_content( $body['content'] ) : '',
 			'post_excerpt' => isset( $body['excerpt'] ) ? $body['excerpt'] : '',
 			'post_status'  => isset( $body['status'] ) ? $body['status'] : 'draft',
 			'post_type'    => isset( $body['type'] ) ? $body['type'] : 'post',
@@ -379,7 +458,7 @@ class MKB_Content_Endpoints {
 		// Create it.
 		$post_data = array(
 			'post_title'   => isset( $body['title'] ) ? $body['title'] : ucfirst( $slug ),
-			'post_content' => isset( $body['content'] ) ? $body['content'] : '',
+			'post_content' => isset( $body['content'] ) ? self::sanitize_block_content( $body['content'] ) : '',
 			'post_excerpt' => isset( $body['excerpt'] ) ? $body['excerpt'] : '',
 			'post_status'  => isset( $body['status'] ) ? $body['status'] : 'publish',
 			'post_type'    => 'page',
