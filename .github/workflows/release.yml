@@ -73,8 +73,7 @@ jobs:
             --exclude='.distignore' \
             --exclude='.editorconfig' \
             --exclude='node_modules' \
-            --exclude='vendor' \
-            --exclude='tests' \
+            --exclude='/vendor' \
             --exclude='*.log' \
             --exclude='.DS_Store' \
             --exclude='*.zip' \
