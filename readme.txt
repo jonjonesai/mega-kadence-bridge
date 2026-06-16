@@ -4,7 +4,7 @@ Tags: kadence, rest-api, claude, ai, automation, woocommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.2.2
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,6 +61,14 @@ Some endpoints are Kadence-specific (palette, theme mods, Pro feature flags), bu
 The old Application Password is invalidated and a new one is created. You'll need to update your local .env file with the new value.
 
 == Changelog ==
+
+= 1.3.0 =
+* New Production Endpoints class — the "Production Pass" the store-drop-skill runs once per fresh install to take a store from "deployed" to "production-ready". All endpoints are idempotent (return changed:false when already in the target state) and snapshot prior state before any destructive write.
+* `POST /permalinks` — set permalink_structure (default `/%category%/%postname%/`) and flush rewrite rules so pretty URLs resolve. Snapshots the old structure.
+* `POST /media/disable-thumbnails` — drop a mu-plugin that filters `intermediate_image_sizes_advanced` to stop WP/Kadence/Woo generating resized copies on upload, and zero the core media size options. Idempotent via a header marker in the mu-plugin.
+* `POST /litespeed/optimize-images` — enable LiteSpeed Cache image optimization auto-request + WebP delivery via LSCWP's own config API. Skips cleanly (changed:false) when LiteSpeed is not active.
+* `POST /spam-protection` — enable FluentForms honeypot (read-modify-write of misc.honeypotStatus, preserving sibling settings) and install + activate limit-login-attempts-reloaded. Does not touch reCAPTCHA. Skips FF part cleanly when FluentForms is inactive.
+* `POST /production-pass` — orchestrator that runs all four and returns a combined per-step report.
 
 = 1.0.0 =
 * Initial release.

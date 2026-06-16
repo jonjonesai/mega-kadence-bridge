@@ -1538,3 +1538,25 @@ When creating ANY page via the bridge:
 After that: course filming on cutemerch.love, then student rollout.
 
 — End of Session 3 dev log.
+
+---
+
+## Session 4 — Production Pass endpoints (v1.3.0)
+
+Added a new endpoint class (`includes/endpoints/class-production-endpoints.php`) registered as the `production` label. These productize the deterministic "make this store production-ready" steps the store-drop-skill runs once per fresh install. Every endpoint follows the existing doctrine: HTTP Basic `claude-bot` + `MKB_REST_Controller::check_permission`, `{success, changed, ...}` response envelope, idempotency (`changed:false` when already in target state), and a `MKB_History` snapshot before any destructive write (rollback-able via `POST /rollback/{id}`).
+
+### Endpoints
+
+1. `POST /permalinks` — body `{"structure":"/%category%/%postname%/"}` (defaults to that). Sets `permalink_structure` and calls `flush_rewrite_rules(true)` so pretty URLs resolve. Snapshots old structure as `option_set`. Returns `{changed, structure, previous, snapshot_id}`.
+
+2. `POST /media/disable-thumbnails` — writes `WPMU_PLUGIN_DIR/mega-disable-thumbnails.php` filtering `intermediate_image_sizes_advanced` → `array()` (plus `intermediate_image_sizes` and `big_image_size_threshold`), creating the mu-plugins dir if missing, and zeroes the eight core media size options. Idempotent via the `MEGA - Disable Generated Image Sizes` header marker. Productizes `recipes/disable-thumbnail-generation.md`.
+
+3. `POST /litespeed/optimize-images` — when LiteSpeed Cache is active, enables `img_optm-auto`, `img_optm-cron`, `img_optm-webp` through LSCWP's first-party `\LiteSpeed\Conf::cls()->update()` (option keys verified against LSCWP `src/base.cls.php`; stored as `litespeed.conf.<key>`), with a direct-option fallback. When LiteSpeed is inactive returns `{success:true, changed:false, message:"LiteSpeed not active"}` — never errors.
+
+4. `POST /spam-protection` — (a) enables FluentForms honeypot via read-modify-write of `_fluentform_global_form_settings` → `misc.honeypotStatus = 'yes'` (key verified against FluentForm `HoneyPot::isEnabled`), preserving sibling settings, skipping cleanly if FF inactive; (b) installs + activates `limit-login-attempts-reloaded` from wp.org if not already active. Does NOT touch reCAPTCHA. Idempotent on both.
+
+5. `POST /production-pass` — orchestrator that runs all four and returns a combined per-step report under `steps`.
+
+Version bumped 1.2.3 → 1.3.0 (header, `MKB_VERSION`, readme.txt stable tag + changelog).
+
+— End of Session 4 dev log.

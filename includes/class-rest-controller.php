@@ -40,6 +40,7 @@ class MKB_REST_Controller {
 		'MKB_Kadence_Endpoints'      => 'kadence',
 		'MKB_History_Endpoints'      => 'history',
 		'MKB_Plugin_Endpoints'       => 'plugin',
+		'MKB_Production_Endpoints'   => 'production',
 	);
 
 	/**
