@@ -215,4 +215,42 @@ class MKB_REST_Controller {
 	public static function error( $code, $message, $status = 400 ) {
 		return new WP_Error( $code, $message, array( 'status' => $status ) );
 	}
+
+	/**
+	 * Helper — download a ZIP to a local temp file and (optionally) verify its
+	 * SHA-256 before anyone installs it. This is the trust boundary for premium
+	 * artifacts pulled from a private bucket: the manifest pins the expected
+	 * hash, and we refuse to install anything that doesn't match.
+	 *
+	 * Returns the local temp file path (caller installs from it, then unlinks),
+	 * or WP_Error on download failure / checksum mismatch.
+	 *
+	 * @param string $url    Direct ZIP URL (e.g. a short-lived presigned URL).
+	 * @param string $sha256 Expected lowercase hex SHA-256. Empty = skip check.
+	 * @return string|WP_Error Local temp path, or WP_Error.
+	 */
+	public static function download_verified( $url, $sha256 = '' ) {
+		if ( ! function_exists( 'download_url' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+		}
+
+		$tmp = download_url( $url );
+		if ( is_wp_error( $tmp ) ) {
+			return $tmp;
+		}
+
+		if ( '' !== $sha256 ) {
+			$actual = hash_file( 'sha256', $tmp );
+			if ( ! hash_equals( strtolower( $sha256 ), strtolower( (string) $actual ) ) ) {
+				wp_delete_file( $tmp );
+				return new WP_Error(
+					'mkb_sha256_mismatch',
+					sprintf( 'Checksum mismatch: expected %s, got %s. Refusing to install.', $sha256, $actual ),
+					array( 'status' => 422 )
+				);
+			}
+		}
+
+		return $tmp;
+	}
 }

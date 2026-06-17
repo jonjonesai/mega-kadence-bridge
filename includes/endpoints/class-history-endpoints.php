@@ -103,6 +103,12 @@ class MKB_History_Endpoints {
 				update_option( $target, $previous );
 				break;
 
+			case 'theme_switch':
+				if ( $previous && function_exists( 'switch_theme' ) ) {
+					switch_theme( $previous );
+				}
+				break;
+
 			case 'palette_set':
 				update_option( 'kadence_global_palette', $previous );
 				set_theme_mod( 'kadence_global_palette', $previous );

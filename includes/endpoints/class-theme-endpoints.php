@@ -10,6 +10,7 @@
  *   GET|POST /css
  *   GET      /settings                (dumps all Kadence-prefixed theme_mods)
  *   GET      /settings/all            (dumps every theme_mod)
+ *   POST     /themes/install-from-url (install a theme ZIP — e.g. the Kadence theme)
  *
  * @package MegaKadenceBridge
  */
@@ -46,6 +47,16 @@ class MKB_Theme_Endpoints {
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( __CLASS__, 'set_theme_mods_batch' ),
+				'permission_callback' => $permission,
+			)
+		);
+
+		register_rest_route(
+			$ns,
+			'/themes/install-from-url',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'install_theme_from_url' ),
 				'permission_callback' => $permission,
 			)
 		);
@@ -360,6 +371,133 @@ class MKB_Theme_Endpoints {
 			array(
 				'settings' => $theme_mods,
 				'total'    => count( $theme_mods ),
+			)
+		);
+	}
+
+	/**
+	 * POST /themes/install-from-url
+	 *
+	 * Installs a theme from a direct ZIP URL — the missing companion to
+	 * /plugins/install (which already takes a zip_url). This is how the
+	 * store-drop installs the Kadence theme itself onto a fresh WordPress.
+	 *
+	 * Body:
+	 *   {
+	 *     "url":        "https://...zip",   (required — e.g. a short-lived presigned URL)
+	 *     "sha256":     "abc123...",        (optional — verified before install; manifest trust)
+	 *     "activate":   true,               (optional, default true — switch_theme after install)
+	 *     "stylesheet": "kadence"           (optional — lets us short-circuit if already
+	 *                                         installed/active, and is required to activate
+	 *                                         when re-running against an existing install)
+	 *   }
+	 *
+	 * Idempotent: if "stylesheet" is given and already the active theme, no-op
+	 * (changed:false). Snapshots the prior active theme as `theme_switch` before
+	 * switching, so activation is rollback-able via POST /rollback/{id}.
+	 */
+	public static function install_theme_from_url( $request ) {
+		$body       = $request->get_json_params();
+		$url        = isset( $body['url'] ) ? esc_url_raw( $body['url'] ) : '';
+		$sha256     = isset( $body['sha256'] ) ? sanitize_text_field( $body['sha256'] ) : '';
+		$activate   = ! isset( $body['activate'] ) || (bool) $body['activate'];
+		$stylesheet = isset( $body['stylesheet'] ) ? sanitize_key( $body['stylesheet'] ) : '';
+
+		if ( empty( $url ) ) {
+			return MKB_REST_Controller::error( 'missing_url', 'url (theme ZIP) is required.', 400 );
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+		require_once ABSPATH . 'wp-admin/includes/theme.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+
+		// Idempotency: already installed?
+		$already_installed = false;
+		if ( $stylesheet ) {
+			$existing          = wp_get_theme( $stylesheet );
+			$already_installed = $existing->exists();
+		}
+
+		$installed_stylesheet = $stylesheet;
+		$did_install          = false;
+
+		if ( ! $already_installed ) {
+			$local = MKB_REST_Controller::download_verified( $url, $sha256 );
+			if ( is_wp_error( $local ) ) {
+				return $local;
+			}
+
+			$skin     = new WP_Ajax_Upgrader_Skin();
+			$upgrader = new Theme_Upgrader( $skin );
+			$result   = $upgrader->install( $local );
+			wp_delete_file( $local );
+
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+			if ( false === $result ) {
+				$messages = $skin->get_error_messages();
+				return MKB_REST_Controller::error(
+					'mkb_theme_install_failed',
+					'Theme install failed: ' . ( $messages ? implode( '; ', $messages ) : 'unknown error' ),
+					500
+				);
+			}
+
+			$did_install = true;
+			$info        = $upgrader->theme_info();
+			if ( $info && ! is_wp_error( $info ) ) {
+				$installed_stylesheet = $info->get_stylesheet();
+			}
+
+			MKB_History::record(
+				'theme_install_from_url',
+				$installed_stylesheet,
+				null,
+				array( 'url' => $url, 'sha256' => $sha256 ),
+				array( 'endpoint' => 'themes/install-from-url' )
+			);
+		}
+
+		if ( empty( $installed_stylesheet ) ) {
+			return MKB_REST_Controller::error(
+				'mkb_theme_no_stylesheet',
+				'Theme installed but the stylesheet could not be resolved; pass "stylesheet" to activate.',
+				500
+			);
+		}
+
+		$activated      = false;
+		$already_active = false;
+		if ( $activate ) {
+			$current = get_stylesheet();
+			if ( $current === $installed_stylesheet ) {
+				$already_active = true;
+				$activated      = true;
+			} else {
+				// Snapshot the prior active theme so the switch is rollback-able.
+				MKB_History::record(
+					'theme_switch',
+					'stylesheet',
+					$current,
+					$installed_stylesheet,
+					array( 'endpoint' => 'themes/install-from-url' )
+				);
+				switch_theme( $installed_stylesheet );
+				$activated = ( get_stylesheet() === $installed_stylesheet );
+			}
+		}
+
+		return MKB_REST_Controller::success(
+			array(
+				'changed'         => $did_install || ( $activate && ! $already_active ),
+				'installed'       => $did_install || $already_installed,
+				'newly_installed' => $did_install,
+				'theme'           => $installed_stylesheet,
+				'activated'       => $activated,
+				'already_active'  => $already_active,
+				'sha256_verified' => '' !== $sha256,
 			)
 		);
 	}

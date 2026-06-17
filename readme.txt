@@ -4,7 +4,7 @@ Tags: kadence, rest-api, claude, ai, automation, woocommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,6 +61,11 @@ Some endpoints are Kadence-specific (palette, theme mods, Pro feature flags), bu
 The old Application Password is invalidated and a new one is created. You'll need to update your local .env file with the new value.
 
 == Changelog ==
+
+= 1.4.0 =
+* New `POST /themes/install-from-url` — install a theme from a direct ZIP URL (the missing companion to /plugins/install, which already takes a zip_url). This is how the store-drop installs the Kadence theme itself onto a fresh WordPress. Optional `sha256` is verified before install; `activate` (default true) switches the theme and snapshots the prior one as `theme_switch` (now rollback-able via POST /rollback/{id}). Idempotent when `stylesheet` is supplied.
+* `POST /plugins/install` + `/plugins/install-and-activate` now accept an optional `sha256` — when installing a premium plugin from a `zip_url`, the ZIP is downloaded and checksum-verified before install (refuses on mismatch). Backward compatible: omit `sha256` for the prior direct-from-URL behavior.
+* Shared `MKB_REST_Controller::download_verified()` helper — the trust boundary for premium artifacts pulled from a private bucket against a manifest-pinned hash.
 
 = 1.3.0 =
 * New Production Endpoints class — the "Production Pass" the store-drop-skill runs once per fresh install to take a store from "deployed" to "production-ready". All endpoints are idempotent (return changed:false when already in the target state) and snapshot prior state before any destructive write.
