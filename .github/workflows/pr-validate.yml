@@ -1,0 +1,76 @@
+name: PR Validate
+
+# Runs on every PR into main. This is the review gate that release.yml never
+# had: it lints PHP and rebuilds the distribution zip EXACTLY like the release
+# workflow, then asserts the critical bundled dependencies are present. The
+# un-anchored `vendor` exclude that stripped PucReadmeParser rode along silently
+# for three releases (1.2.1–1.2.3-first-try) because nothing checked the build.
+# This catches that whole class of bug before it can merge.
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: PHP lint (all .php)
+        run: |
+          set -e
+          err=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" >/dev/null || { echo "LINT FAILED: $f"; err=1; }
+          done < <(find . -name '*.php' -not -path './includes/lib/*' -print0)
+          [ "$err" -eq 0 ] && echo "All PHP files lint clean."
+
+      - name: Plugin header version is valid semver
+        run: |
+          V=$(grep -E "^\s*\*\s*Version:" mega-kadence-bridge.php | head -1 | sed -E 's/.*Version:\s*//' | tr -d ' ')
+          echo "Plugin version header: $V"
+          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "ERROR: version '$V' is not X.Y.Z"; exit 1; }
+
+      - name: Build dist zip (mirror of release.yml) and assert bundled deps
+        run: |
+          set -e
+          # Bundle PUC + Parsedown exactly as release.yml does.
+          mkdir -p includes/lib && cd includes/lib
+          curl -sL https://github.com/YahnisElsts/plugin-update-checker/archive/refs/tags/v5.6.zip -o puc.zip
+          unzip -q puc.zip && mv plugin-update-checker-5.6 plugin-update-checker && rm puc.zip
+          curl -sL https://github.com/erusev/parsedown/raw/1.7.4/Parsedown.php -o Parsedown.php
+          cd "$GITHUB_WORKSPACE"
+
+          mkdir -p /tmp/mega-kadence-bridge
+          rsync -a \
+            --exclude='.git' --exclude='.github' --exclude='.gitignore' \
+            --exclude='.distignore' --exclude='.editorconfig' \
+            --exclude='node_modules' --exclude='/vendor' \
+            --exclude='*.log' --exclude='.DS_Store' --exclude='*.zip' \
+            ./ /tmp/mega-kadence-bridge/
+
+          echo "=== asserting critical bundled files survive the build ==="
+          REQUIRED=(
+            "/tmp/mega-kadence-bridge/mega-kadence-bridge.php"
+            "/tmp/mega-kadence-bridge/includes/lib/Parsedown.php"
+            "/tmp/mega-kadence-bridge/includes/lib/plugin-update-checker/vendor/PucReadmeParser.php"
+            "/tmp/mega-kadence-bridge/includes/lib/plugin-update-checker/load-v5p6.php"
+          )
+          fail=0
+          for f in "${REQUIRED[@]}"; do
+            if [ -f "$f" ]; then echo "OK   $f"; else echo "MISSING $f"; fail=1; fi
+          done
+          [ "$fail" -eq 0 ] || { echo "Build is missing required files — would break PUC/Parsedown on customer sites."; exit 1; }
+          echo "Dist build validated."
