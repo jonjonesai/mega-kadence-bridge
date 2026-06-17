@@ -65,7 +65,7 @@ The old Application Password is invalidated and a new one is created. You'll nee
 = 1.3.0 =
 * New Production Endpoints class — the "Production Pass" the store-drop-skill runs once per fresh install to take a store from "deployed" to "production-ready". All endpoints are idempotent (return changed:false when already in the target state) and snapshot prior state before any destructive write.
 * `POST /permalinks` — set permalink_structure (default `/%category%/%postname%/`) and flush rewrite rules so pretty URLs resolve. Snapshots the old structure.
-* `POST /media/disable-thumbnails` — drop a mu-plugin that filters `intermediate_image_sizes_advanced` to stop WP/Kadence/Woo generating resized copies on upload, and zero the core media size options. Idempotent via a header marker in the mu-plugin.
+* `POST /media/disable-thumbnails` — zero the eight core media-size options (Settings > Media) so WP stops generating the generic thumbnail/medium/large copies on upload. Scoped to core sizes only; leaves WooCommerce/Kadence registered sizes intact so the storefront still renders. Idempotent; snapshots each changed option for rollback.
 * `POST /litespeed/optimize-images` — enable LiteSpeed Cache image optimization auto-request + WebP delivery via LSCWP's own config API. Skips cleanly (changed:false) when LiteSpeed is not active.
 * `POST /spam-protection` — enable FluentForms honeypot (read-modify-write of misc.honeypotStatus, preserving sibling settings) and install + activate limit-login-attempts-reloaded. Does not touch reCAPTCHA. Skips FF part cleanly when FluentForms is inactive.
 * `POST /production-pass` — orchestrator that runs all four and returns a combined per-step report.

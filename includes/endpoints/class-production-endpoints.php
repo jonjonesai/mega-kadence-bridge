@@ -9,7 +9,7 @@
  *
  * Routes:
  *   POST /permalinks                Set pretty permalink structure + flush rewrites
- *   POST /media/disable-thumbnails  Drop mu-plugin to stop sub-size generation
+ *   POST /media/disable-thumbnails  Zero core media sizes (Settings > Media)
  *   POST /litespeed/optimize-images Enable LSCWP image optimization + WebP
  *   POST /spam-protection           FF honeypot + login-lockdown plugin
  *   POST /production-pass           Orchestrate all four, combined report
@@ -33,18 +33,6 @@ class MKB_Production_Endpoints {
 	 * shape store-drop ships by default.
 	 */
 	const DEFAULT_PERMALINK_STRUCTURE = '/%category%/%postname%/';
-
-	/**
-	 * Path of the must-use plugin that strips generated image sub-sizes.
-	 * WPMU_PLUGIN_DIR is resolved at call time (it is always defined by core).
-	 */
-	const MU_THUMBNAILS_FILE = 'mega-disable-thumbnails.php';
-
-	/**
-	 * Header marker we write into the mu-plugin. Used for idempotency: if the
-	 * file already contains this marker, the thumbnails endpoint is a no-op.
-	 */
-	const MU_THUMBNAILS_MARKER = 'MEGA - Disable Generated Image Sizes';
 
 	public static function register( $ns ) {
 		$permission = array( 'MKB_REST_Controller', 'check_permission' );
@@ -166,25 +154,23 @@ class MKB_Production_Endpoints {
 	/**
 	 * POST /media/disable-thumbnails
 	 *
-	 * Writes a must-use plugin that filters intermediate_image_sizes_advanced
-	 * (and intermediate_image_sizes) to return an empty array, stopping WP core,
-	 * Kadence, and WooCommerce from generating resized copies on upload. Also
-	 * zeroes the core media size options so the Settings > Media UI agrees with
-	 * runtime behavior.
+	 * Zeroes the eight core WP media-size options (Settings > Media): thumbnail,
+	 * medium, medium_large, and large width/height. With a dimension at 0 WP
+	 * skips generating that copy on upload, so a fresh store stops accumulating
+	 * the generic resized variants that bloat disk + inodes on shared hosting.
 	 *
-	 * Idempotent: if the mu-plugin file already exists with our header marker,
-	 * returns changed:false. Productizes
-	 * recipes/disable-thumbnail-generation.md.
+	 * Deliberately scoped to the CORE sizes only — it does NOT disable the sizes
+	 * WooCommerce and Kadence register in code (woocommerce_thumbnail,
+	 * woocommerce_single, etc.), because the storefront needs those to render
+	 * product images at sensible dimensions. This mirrors the manual
+	 * Settings > Media workflow, automated.
+	 *
+	 * Idempotent: each option already at 0 is skipped; returns changed:false
+	 * when nothing needed zeroing. Snapshots each changed option under its real
+	 * name so POST /rollback/{id} restores it via the option_set handler.
 	 */
 	public static function disable_thumbnails( $request ) {
-		$mu_dir  = defined( 'WPMU_PLUGIN_DIR' ) ? WPMU_PLUGIN_DIR : WP_CONTENT_DIR . '/mu-plugins';
-		$mu_file = trailingslashit( $mu_dir ) . self::MU_THUMBNAILS_FILE;
-
-		$already = file_exists( $mu_file )
-			&& false !== strpos( (string) file_get_contents( $mu_file ), self::MU_THUMBNAILS_MARKER );
-
-		// The size options we zero. Snapshot them for rollback regardless, but
-		// only treat the write as a change when something actually differs.
+		// Core media sizes shown on Settings > Media.
 		$size_options = array(
 			'thumbnail_size_w',
 			'thumbnail_size_h',
@@ -196,94 +182,42 @@ class MKB_Production_Endpoints {
 			'large_size_h',
 		);
 
-		$current_sizes   = array();
-		$sizes_all_zero  = true;
+		$snapshots = array();
+		$zeroed    = array();
 		foreach ( $size_options as $opt ) {
-			$val                  = (int) get_option( $opt, 0 );
-			$current_sizes[ $opt ] = $val;
-			if ( 0 !== $val ) {
-				$sizes_all_zero = false;
+			$val = (int) get_option( $opt, 0 );
+			if ( 0 === $val ) {
+				continue; // Already zero — nothing to change or snapshot.
 			}
+			// Snapshot the real option before zeroing it so rollback works.
+			$snapshots[ $opt ] = MKB_History::record(
+				'option_set',
+				$opt,
+				$val,
+				0,
+				array( 'endpoint' => 'media/disable-thumbnails' )
+			);
+			update_option( $opt, 0 );
+			$zeroed[] = $opt;
 		}
 
-		if ( $already && $sizes_all_zero ) {
+		if ( empty( $zeroed ) ) {
 			return MKB_REST_Controller::success(
 				array(
 					'changed' => false,
-					'mu_file' => $mu_file,
-					'message' => 'mu-plugin already installed and media sizes already zeroed; no change.',
+					'message' => 'Core media sizes already zeroed; no change.',
 				)
 			);
 		}
 
-		// Snapshot the size options before zeroing them. Rollback restores the
-		// option map. (The mu-plugin file removal is documented manual rollback.)
-		$snapshot_id = MKB_History::record(
-			'option_set',
-			'mkb_media_size_options',
-			$current_sizes,
-			array_fill_keys( $size_options, 0 ),
-			array(
-				'endpoint'    => 'media/disable-thumbnails',
-				'mu_file'     => $mu_file,
-				'note'        => 'Rollback restores media size options. Remove the mu-plugin file manually to re-enable sub-size generation.',
-			)
-		);
-
-		// Ensure mu-plugins dir exists.
-		if ( ! is_dir( $mu_dir ) ) {
-			wp_mkdir_p( $mu_dir );
-		}
-
-		$wrote_file = false;
-		if ( ! $already ) {
-			$body = self::mu_thumbnails_body();
-			$ok   = file_put_contents( $mu_file, $body ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-			if ( false === $ok ) {
-				return MKB_REST_Controller::error(
-					'mkb_mu_write_failed',
-					'Could not write mu-plugin to ' . $mu_file . ' — check filesystem permissions.',
-					500
-				);
-			}
-			$wrote_file = true;
-		}
-
-		// Zero the core media size options.
-		foreach ( $size_options as $opt ) {
-			update_option( $opt, 0 );
-		}
-
 		return MKB_REST_Controller::success(
 			array(
-				'changed'        => true,
-				'mu_file'        => $mu_file,
-				'mu_file_bytes'  => file_exists( $mu_file ) ? filesize( $mu_file ) : 0,
-				'wrote_mu_file'  => $wrote_file,
-				'sizes_zeroed'   => $size_options,
-				'snapshot_id'    => $snapshot_id,
-				'message'        => 'Generated image sizes disabled. Only the original upload is kept going forward.',
+				'changed'      => true,
+				'sizes_zeroed' => $zeroed,
+				'snapshot_ids' => $snapshots,
+				'message'      => 'Core media sizes zeroed (Settings > Media). WooCommerce/Kadence registered sizes left intact.',
 			)
 		);
-	}
-
-	/**
-	 * The mu-plugin body. Mirrors recipes/disable-thumbnail-generation.md.
-	 *
-	 * @return string
-	 */
-	private static function mu_thumbnails_body() {
-		return "<?php\n"
-			. "/**\n"
-			. ' * Plugin Name: ' . self::MU_THUMBNAILS_MARKER . "\n"
-			. " * Description: Stops WordPress core, Kadence, and WooCommerce from generating thumbnail variants on upload. Original is preserved; all registered sub-sizes are skipped. Installed by Mega Kadence Bridge.\n"
-			. " * Version: 1.0.0\n"
-			. " * Author: MEGA\n"
-			. " */\n"
-			. "if (!defined('ABSPATH')) exit;\n\n"
-			. "add_filter('intermediate_image_sizes_advanced', function (\$sizes) { return array(); }, 99);\n"
-			. "add_filter('intermediate_image_sizes',          function (\$sizes) { return array(); }, 99);\n"
-			. "add_filter('big_image_size_threshold', '__return_false');\n";
 	}
 
 	/**
@@ -346,15 +280,20 @@ class MKB_Production_Endpoints {
 			);
 		}
 
-		// Snapshot the prior config values before writing.
+		// Snapshot the prior config values before writing. Recorded under a
+		// dedicated op type (not option_set) so POST /rollback/{id} honestly
+		// returns rollback_unsupported instead of writing the captured map to a
+		// non-existent option and faking success — LSCWP spreads these across
+		// litespeed.conf.<key> rows plus its own cron/purge side effects, so the
+		// undo path is the LiteSpeed UI, per the note below.
 		$snapshot_id = MKB_History::record(
-			'option_set',
+			'litespeed_conf_set',
 			'mkb_litespeed_img_optm',
 			$previous,
 			$applied,
 			array(
 				'endpoint' => 'litespeed/optimize-images',
-				'note'     => 'Rollback note: LSCWP config is option-backed; restore via LiteSpeed > Image Optimization or \\LiteSpeed\\Conf::cls()->update() with the previous values.',
+				'note'     => 'Rollback note: turning on image optimization is not something you normally revert. If needed, restore via LiteSpeed > Image Optimization or \\LiteSpeed\\Conf::cls()->update() with the previous values.',
 			)
 		);
 
