@@ -3,7 +3,7 @@
  * Plugin Name:       Mega Kadence Bridge
  * Plugin URI:        https://github.com/jonjonesai/mega-kadence-bridge
  * Description:       REST API bridge that lets an AI agent (Claude, Cursor, any client) become a master of Kadence on this WordPress site. Exposes Kadence-fluent endpoints for theme mods, palette, blocks, header/footer, content, media, WooCommerce, plugins, and history — plus a /capabilities discovery endpoint that teaches the agent how to operate Kadence correctly. POD stores are one application; any Kadence site is in scope.
- * Version:           1.2.3
+ * Version:           1.3.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Jon Jones AI
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants.
-define( 'MKB_VERSION', '1.2.3' );
+define( 'MKB_VERSION', '1.3.0' );
 define( 'MKB_PLUGIN_FILE', __FILE__ );
 define( 'MKB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MKB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -58,6 +58,7 @@ $mkb_endpoint_files = array(
 	'class-woo-endpoints.php',
 	'class-history-endpoints.php',
 	'class-plugin-endpoints.php',
+	'class-production-endpoints.php',
 );
 foreach ( $mkb_endpoint_files as $mkb_endpoint_file ) {
 	$mkb_endpoint_path = MKB_PLUGIN_DIR . 'includes/endpoints/' . $mkb_endpoint_file;
