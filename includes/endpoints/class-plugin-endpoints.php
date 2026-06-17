@@ -98,6 +98,7 @@ class MKB_Plugin_Endpoints {
 	 *
 	 * Body: { slug: "fluentform" }       -- install from wordpress.org by slug
 	 *   OR  { zip_url: "https://..." }   -- install from a ZIP URL (premium)
+	 *   plus optional { sha256: "..." }  -- verify the ZIP before install (manifest trust)
 	 *
 	 * Returns: { installed: true, plugin: "fluentform/fluentform.php" }
 	 */
@@ -105,6 +106,7 @@ class MKB_Plugin_Endpoints {
 		$body    = $request->get_json_params();
 		$slug    = isset( $body['slug'] ) ? sanitize_key( $body['slug'] ) : '';
 		$zip_url = isset( $body['zip_url'] ) ? esc_url_raw( $body['zip_url'] ) : '';
+		$sha256  = isset( $body['sha256'] ) ? sanitize_text_field( $body['sha256'] ) : '';
 
 		if ( ! $slug && ! $zip_url ) {
 			return MKB_REST_Controller::error(
@@ -114,7 +116,7 @@ class MKB_Plugin_Endpoints {
 			);
 		}
 
-		$result = self::do_install( $slug, $zip_url );
+		$result = self::do_install( $slug, $zip_url, $sha256 );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
@@ -184,6 +186,7 @@ class MKB_Plugin_Endpoints {
 	 * POST /plugins/install-and-activate
 	 *
 	 * Body: { slug: "fluentform" }  OR  { zip_url: "https://..." }
+	 *   plus optional { sha256: "..." }  -- verify the ZIP before install (manifest trust)
 	 *
 	 * Convenience combo for the deploy DAG.
 	 */
@@ -191,6 +194,7 @@ class MKB_Plugin_Endpoints {
 		$body    = $request->get_json_params();
 		$slug    = isset( $body['slug'] ) ? sanitize_key( $body['slug'] ) : '';
 		$zip_url = isset( $body['zip_url'] ) ? esc_url_raw( $body['zip_url'] ) : '';
+		$sha256  = isset( $body['sha256'] ) ? sanitize_text_field( $body['sha256'] ) : '';
 
 		if ( ! $slug && ! $zip_url ) {
 			return MKB_REST_Controller::error(
@@ -221,7 +225,7 @@ class MKB_Plugin_Endpoints {
 			}
 		}
 
-		$plugin_file = self::do_install( $slug, $zip_url );
+		$plugin_file = self::do_install( $slug, $zip_url, $sha256 );
 		if ( is_wp_error( $plugin_file ) ) {
 			return $plugin_file;
 		}
@@ -267,16 +271,19 @@ class MKB_Plugin_Endpoints {
 	 *
 	 * @param string $slug    wordpress.org plugin slug, or empty.
 	 * @param string $zip_url Direct ZIP URL, or empty.
+	 * @param string $sha256  Expected SHA-256 of the ZIP (zip_url only). Empty = skip.
 	 * @return string|WP_Error
 	 */
-	private static function do_install( $slug, $zip_url ) {
+	private static function do_install( $slug, $zip_url, $sha256 = '' ) {
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 		require_once ABSPATH . 'wp-admin/includes/misc.php';
 		require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
 		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 
-		$download_url = '';
+		$package = '';   // What we hand to Plugin_Upgrader::install() — a URL or a local file.
+		$cleanup = '';   // Local temp file to unlink afterwards, if we downloaded one.
+
 		if ( $slug ) {
 			$api = plugins_api(
 				'plugin_information',
@@ -296,13 +303,27 @@ class MKB_Plugin_Endpoints {
 					array( 'status' => 502 )
 				);
 			}
+			$package = $download_url;
+		} elseif ( '' !== $sha256 ) {
+			// Premium ZIP with a pinned checksum — download + verify before install.
+			$local = MKB_REST_Controller::download_verified( $zip_url, $sha256 );
+			if ( is_wp_error( $local ) ) {
+				return $local;
+			}
+			$package = $local;
+			$cleanup = $local;
 		} else {
-			$download_url = $zip_url;
+			// Premium ZIP, no checksum supplied — install straight from the URL (legacy behavior).
+			$package = $zip_url;
 		}
 
 		$skin     = new WP_Ajax_Upgrader_Skin();
 		$upgrader = new Plugin_Upgrader( $skin );
-		$result   = $upgrader->install( $download_url );
+		$result   = $upgrader->install( $package );
+
+		if ( $cleanup ) {
+			wp_delete_file( $cleanup );
+		}
 
 		if ( is_wp_error( $result ) ) {
 			return $result;

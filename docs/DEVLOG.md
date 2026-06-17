@@ -1560,3 +1560,25 @@ Added a new endpoint class (`includes/endpoints/class-production-endpoints.php`)
 Version bumped 1.2.3 → 1.3.0 (header, `MKB_VERSION`, readme.txt stable tag + changelog).
 
 — End of Session 4 dev log.
+
+---
+
+## Session 5 — Theme install-from-url + SHA-256 verification (v1.4.0)
+
+Closing the last gap for onboarding a customer who has *no* WordPress site: the framework can now stand up the **Kadence theme itself**, and install premium plugins from a private artifact store with a verified checksum.
+
+**Context / what we found.** MKB already installs *plugins* from an arbitrary `zip_url` (`/plugins/install`, `/plugins/install-and-activate` → `Plugin_Upgrader::install($url)`) — so Kadence Pro / Fluent Pro (premium *plugins*) were already installable. The real gaps were: (a) **no theme install at all** — `MKB_Theme_Endpoints` was theme *config* (mods/palette/css) only, so the free Kadence *theme* couldn't be installed; (b) **no checksum verification** for premium ZIPs pulled from our bucket.
+
+**Onboarding model this serves.** Customer's total manual work = set up WP on Hostinger → point nameservers → upload one connector plugin → paste 4 `BRIDGE_*` creds. A bare WP exposes no unauthenticated doorway and we never hold the customer's hosting shell, so that one upload is irreducible. Everything past it runs over the bridge. Premium plugins live in a private R2 bucket + a repo-pinned `manifest.json` (name/version/sha256); store-drop mints a short-lived presigned URL per run and passes `{url, sha256}` to MKB. Licenses are clear: Jon holds Kadence lifetime-agency (unlimited sites) + FluentForms agency tiers that permit client-site activation.
+
+**Changes.**
+1. `POST /themes/install-from-url` (new, in `MKB_Theme_Endpoints`) — body `{url, sha256?, activate=true, stylesheet?}`. Downloads → optional SHA-256 verify → `Theme_Upgrader::install()` → `switch_theme()`. Idempotent when `stylesheet` is supplied (skips reinstall / no-ops if already active). Snapshots the prior active theme as `theme_switch`.
+2. `theme_switch` added to the `/rollback/{id}` handler — activation is genuinely reversible (`switch_theme($previous)`), not a fake-success no-op.
+3. `MKB_REST_Controller::download_verified($url, $sha256='')` — shared trust boundary: `download_url()` then `hash_file('sha256')` compared with `hash_equals`; mismatch → 422, file deleted, no install. SSOT for both theme and plugin paths.
+4. `/plugins/install` + `/plugins/install-and-activate` accept optional `sha256`; when a `zip_url` carries a hash we download+verify+install-from-local. Backward compatible (omit `sha256` → prior direct-from-URL behavior).
+
+License-key *activation* deliberately NOT built — testing first whether the publisher (agency) ZIPs activate Pro features on their own; add key-injection only if the test shows features locked.
+
+Version bumped 1.3.0 → 1.4.0 (header, `MKB_VERSION`, readme.txt stable tag + changelog).
+
+— End of Session 5 dev log.
