@@ -89,6 +89,12 @@ class MKB_Woo_Endpoints {
 			'callback'            => array( __CLASS__, 'list_orders' ),
 			'permission_callback' => $permission,
 		) );
+
+		register_rest_route( $ns, '/woo/api-keys/generate', array(
+			'methods'             => 'POST',
+			'callback'            => array( __CLASS__, 'generate_api_key' ),
+			'permission_callback' => $permission,
+		) );
 	}
 
 	public static function get_status( $request ) {
@@ -464,5 +470,100 @@ class MKB_Woo_Endpoints {
 		}
 
 		return MKB_REST_Controller::success( array( 'orders' => $data ) );
+	}
+
+	/**
+	 * POST /woo/api-keys/generate
+	 *
+	 * Mints a WooCommerce REST API key pair (consumer key + secret) for the
+	 * authenticated bridge user, so MEGA's product engine can write products
+	 * into this store over the WooCommerce REST API. The secret is returned
+	 * ONCE — WooCommerce stores only a hash of the key plus the plaintext secret,
+	 * exactly mirroring WC's own admin key generation.
+	 *
+	 * Body (all optional):
+	 *   description  string  label shown in WooCommerce > Settings > Advanced > REST API
+	 *   permissions  string  read | write | read_write  (default read_write)
+	 *
+	 * Returns { consumer_key, consumer_secret, key_id, permissions, user, message }.
+	 */
+	public static function generate_api_key( $request ) {
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			return MKB_REST_Controller::error( 'woo_inactive', 'WooCommerce is not active.', 400 );
+		}
+		if ( ! function_exists( 'wc_rand_hash' ) || ! function_exists( 'wc_api_hash' ) ) {
+			return MKB_REST_Controller::error( 'woo_api_unavailable', 'WooCommerce API helpers unavailable.', 500 );
+		}
+
+		$body        = $request->get_json_params();
+		$description = isset( $body['description'] ) && '' !== trim( (string) $body['description'] )
+			? sanitize_text_field( $body['description'] )
+			: 'MEGA store-drop';
+		$permissions = isset( $body['permissions'] ) ? sanitize_text_field( $body['permissions'] ) : 'read_write';
+		if ( ! in_array( $permissions, array( 'read', 'write', 'read_write' ), true ) ) {
+			return MKB_REST_Controller::error( 'invalid_permissions', 'permissions must be one of: read, write, read_write.', 400 );
+		}
+
+		// Tie the key to the authenticated bridge user (claude-bot). Fall back to
+		// an administrator if the current user somehow can't be resolved.
+		$user_id = get_current_user_id();
+		if ( ! $user_id ) {
+			$admins  = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+			$user_id = $admins ? (int) $admins[0] : 0;
+		}
+		if ( ! $user_id ) {
+			return MKB_REST_Controller::error( 'no_user', 'Could not resolve a user to own the API key.', 500 );
+		}
+
+		global $wpdb;
+		$consumer_key    = 'ck_' . wc_rand_hash();
+		$consumer_secret = 'cs_' . wc_rand_hash();
+
+		$inserted = $wpdb->insert(
+			$wpdb->prefix . 'woocommerce_api_keys',
+			array(
+				'user_id'         => $user_id,
+				'description'     => $description,
+				'permissions'     => $permissions,
+				'consumer_key'    => wc_api_hash( $consumer_key ),
+				'consumer_secret' => $consumer_secret,
+				'truncated_key'   => substr( $consumer_key, -7 ),
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s' )
+		);
+
+		if ( false === $inserted ) {
+			return MKB_REST_Controller::error( 'key_insert_failed', 'Failed to store the API key.', 500 );
+		}
+
+		$key_id = (int) $wpdb->insert_id;
+
+		// Audit snapshot. Revoking a key is destructive of a live credential, so
+		// it is intentionally NOT an auto-rollback op — revoke via
+		// WooCommerce > Settings > Advanced > REST API instead.
+		MKB_History::record(
+			'woo_api_key_create',
+			(string) $key_id,
+			null,
+			array(
+				'description' => $description,
+				'permissions' => $permissions,
+				'user_id'     => $user_id,
+			),
+			array( 'endpoint' => 'woo/api-keys/generate' )
+		);
+
+		$user = get_userdata( $user_id );
+
+		return MKB_REST_Controller::success(
+			array(
+				'consumer_key'    => $consumer_key,
+				'consumer_secret' => $consumer_secret,
+				'key_id'          => $key_id,
+				'permissions'     => $permissions,
+				'user'            => $user ? $user->user_login : null,
+				'message'         => 'WooCommerce API key generated. The consumer_secret is shown only once — store it now.',
+			)
+		);
 	}
 }

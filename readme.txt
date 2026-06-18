@@ -4,7 +4,7 @@ Tags: kadence, rest-api, claude, ai, automation, woocommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,6 +61,9 @@ Some endpoints are Kadence-specific (palette, theme mods, Pro feature flags), bu
 The old Application Password is invalidated and a new one is created. You'll need to update your local .env file with the new value.
 
 == Changelog ==
+
+= 1.5.0 =
+* New `POST /woo/api-keys/generate` — mints a WooCommerce REST API key pair (consumer key + secret) for the authenticated bridge user, mirroring WooCommerce's own admin key generation (stores a hash of the key + the plaintext secret; secret returned once). This is how the store-drop hands MEGA's product engine write access to a freshly dropped store. Optional body: `description`, `permissions` (read | write | read_write, default read_write). Records an audit snapshot; revoke via WooCommerce > Settings > Advanced > REST API.
 
 = 1.4.0 =
 * New `POST /themes/install-from-url` — install a theme from a direct ZIP URL (the missing companion to /plugins/install, which already takes a zip_url). This is how the store-drop installs the Kadence theme itself onto a fresh WordPress. Optional `sha256` is verified before install; `activate` (default true) switches the theme and snapshots the prior one as `theme_switch` (now rollback-able via POST /rollback/{id}). Idempotent when `stylesheet` is supplied.

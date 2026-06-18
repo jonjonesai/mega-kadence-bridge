@@ -1582,3 +1582,19 @@ License-key *activation* deliberately NOT built — testing first whether the pu
 Version bumped 1.3.0 → 1.4.0 (header, `MKB_VERSION`, readme.txt stable tag + changelog).
 
 — End of Session 5 dev log.
+
+---
+
+## Session 6 — `POST /woo/api-keys/generate` (v1.5.0)
+
+The keystone connecting a dropped store to MEGA's catalog engine. The route was documented in `class-woo-endpoints.php`'s header since the WooCommerce endpoints landed, but never registered or implemented — so MEGA had no programmatic way to get write access to a freshly dropped store. Built it:
+
+- `POST /woo/api-keys/generate` — mints a WC REST API key pair for the authenticated bridge user (claude-bot; falls back to an administrator). Mirrors WooCommerce core's own admin key generation exactly: `consumer_key = 'ck_' . wc_rand_hash()`, `consumer_secret = 'cs_' . wc_rand_hash()`, row stores `wc_api_hash($consumer_key)` + the plaintext secret + `truncated_key`. The plaintext `ck_/cs_` pair is returned **once**.
+- Body (optional): `description` (default "MEGA store-drop"), `permissions` (read | write | read_write, default read_write, validated).
+- Guards: WooCommerce active + `wc_rand_hash`/`wc_api_hash` available. Records a `woo_api_key_create` audit snapshot; key revocation is intentionally NOT an auto-rollback op (revoke via WooCommerce > Settings > Advanced > REST API).
+
+Next: store-drop calls this post-install, harvests `{consumer_key, consumer_secret, claude-bot, app-password}`, and pushes the bundle to the MEGA backend (tied to the credit account) so MEGA's product engine writes the catalog in.
+
+Version bumped 1.4.0 → 1.5.0 (header, `MKB_VERSION`, readme.txt stable tag + changelog).
+
+— End of Session 6 dev log.
