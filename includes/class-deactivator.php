@@ -2,7 +2,7 @@
 /**
  * Deactivator — runs on plugin deactivation.
  *
- * Note: We do NOT delete the claude-bot user or its application password on
+ * Note: We do NOT delete the bridge agent user or its application password on
  * deactivation, because a site owner may deactivate and reactivate and expect
  * their credentials to still work. Full cleanup happens in uninstall.php.
  *

@@ -1,27 +1,27 @@
 === Mega Kadence Bridge ===
 Contributors: jonjonesai
-Tags: kadence, rest-api, claude, ai, automation, woocommerce
+Tags: kadence, rest-api, codex, ai, automation, woocommerce
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-A REST API bridge that lets Claude Code operate your Kadence-powered WordPress site. Part of the Mega POD ecosystem.
+A model-agnostic REST API bridge that lets Codex, Claude, Cursor, local models, or any HTTP client operate your Kadence-powered WordPress site.
 
 == Description ==
 
-Mega Kadence Bridge turns your WordPress site into a Claude-controllable system. After a one-click installation, Claude can read and write every Kadence theme setting, create and edit pages using Kadence blocks, manage WooCommerce products, and apply your brand identity across your entire site — all through a private, authenticated REST API.
+Mega Kadence Bridge exposes your WordPress site through a private, authenticated, Kadence-fluent REST API. An authorized AI agent or automation client can read and write Kadence settings, create and edit pages, manage WooCommerce products, and apply brand identity without any model-provider dependency inside the plugin.
 
-It creates a dedicated `claude-bot` user with a WordPress Application Password, shows you a copy-paste .env block in Settings, and exposes a clean REST API under `/wp-json/mega-kadence-bridge/v1/`. Everything is local to your server. No data leaves your site.
+It creates a dedicated `mkb-agent` user with a WordPress Application Password, shows a copy-paste .env block in Settings, and exposes a clean REST API under `/wp-json/mega-kadence-bridge/v1/`. Existing installs preserve their historical bridge username. The bridge does not call a model provider.
 
 Built for students in the [Mega POD](https://mega.management) community who want to launch a fully branded print-on-demand store in a weekend without learning WordPress.
 
 **Key features:**
 
-* Auto-generates `claude-bot` admin user with Application Password on activation
-* Copy-as-.env button in Settings for instant Claude Code setup
+* Auto-generates a provider-neutral `mkb-agent` admin user with Application Password on new installs
+* Copy-as-.env button in Settings for Codex, Claude, Cursor, scripts, or another compatible client
 * 50+ REST endpoints covering theme mods, content, palette, CSS, cache, blocks, WooCommerce
 * Cache-bypassed /render endpoint for verification
 * Snapshot + rollback for every write operation
@@ -34,19 +34,19 @@ Built for students in the [Mega POD](https://mega.management) community who want
 1. Upload the plugin ZIP via Plugins → Add New → Upload Plugin
 2. Activate the plugin
 3. Go to Settings → Mega Kadence Bridge
-4. Click "Copy as .env" and paste into a file called `.env` in your local project folder
-5. Install Claude Code and open your project folder
-6. Start building with Claude
+4. Click "Copy as .env" and paste into an untracked `.env` file in your local project folder
+5. Open the project with Codex, Claude Code, Cursor, or another compatible client
+6. Start with the authenticated `/capabilities` endpoint, then build and verify
 
 == Frequently Asked Questions ==
 
 = Does this send my data anywhere? =
 
-No. The bridge is a local REST API on your own WordPress site. Claude Code runs on your computer and talks directly to your site. No data is sent to Mega, Anthropic, or any third party.
+No. The bridge is a REST API on your own WordPress site. Your selected client talks directly to the site. The plugin does not send data to Mega, OpenAI, Anthropic, or another model provider.
 
-= How do I revoke Claude's access? =
+= How do I revoke agent access? =
 
-Go to Users → claude-bot → Application Passwords, and revoke the Mega Kadence Bridge password. Alternatively, deactivate or delete the plugin.
+Go to Users, open the bridge agent account shown in Settings → Mega Kadence Bridge, and revoke the Mega Kadence Bridge Application Password. Alternatively, deactivate or delete the plugin.
 
 = Does this work without Kadence Pro? =
 
@@ -61,6 +61,12 @@ Some endpoints are Kadence-specific (palette, theme mods, Pro feature flags), bu
 The old Application Password is invalidated and a new one is created. You'll need to update your local .env file with the new value.
 
 == Changelog ==
+
+= 1.6.0 =
+* Added a provider-neutral SKILL.md and AI client guide with Codex instructions
+* New installs use the `mkb-agent` login and `.mega-kadence-bridge` credential directory
+* Existing `claude-bot` installations remain compatible and keep their recorded username
+* Reworked WordPress admin and public documentation around the model-agnostic REST boundary
 
 = 1.5.0 =
 * New `POST /woo/api-keys/generate` — mints a WooCommerce REST API key pair (consumer key + secret) for the authenticated bridge user, mirroring WooCommerce's own admin key generation (stores a hash of the key + the plaintext secret; secret returned once). This is how the store-drop hands MEGA's product engine write access to a freshly dropped store. Optional body: `description`, `permissions` (read | write | read_write, default read_write). Records an audit snapshot; revoke via WooCommerce > Settings > Advanced > REST API.
@@ -80,7 +86,7 @@ The old Application Password is invalidated and a new one is created. You'll nee
 
 = 1.0.0 =
 * Initial release.
-* Activator: creates claude-bot user, generates Application Password, writes credentials file
+* Activator: creates or preserves the bridge agent user, generates an Application Password, and writes the credentials file
 * Settings page with copy-as-.env button and system status
 * REST endpoints: core (info, render, cache, plugins, wp-eval), theme (theme_mod, option, palette, css, settings), content (posts CRUD, pages/ensure, menus), media (upload from URL), Kadence (blocks, Pro config, header/footer), WooCommerce (products, categories, orders)
 * History / snapshot / rollback system for every write operation

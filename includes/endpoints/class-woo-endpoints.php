@@ -504,7 +504,7 @@ class MKB_Woo_Endpoints {
 			return MKB_REST_Controller::error( 'invalid_permissions', 'permissions must be one of: read, write, read_write.', 400 );
 		}
 
-		// Tie the key to the authenticated bridge user (claude-bot). Fall back to
+		// Tie the key to the authenticated bridge agent user. Fall back to
 		// an administrator if the current user somehow can't be resolved.
 		$user_id = get_current_user_id();
 		if ( ! $user_id ) {

@@ -2,9 +2,9 @@
 /**
  * Mega Kadence Bridge — Uninstall Handler
  *
- * Runs when the plugin is deleted from the WP admin. Removes the claude-bot
- * user, revokes the application password, clears stored credentials, and
- * removes the credentials file and its directory.
+ * Runs when the plugin is deleted from the WP admin. Removes the recorded
+ * bridge agent user, revokes the application password, clears stored
+ * credentials, and removes current and legacy credential directories.
  *
  * @package MegaKadenceBridge
  */
@@ -27,15 +27,20 @@ delete_option( 'mkb_activation_completed' );
 delete_option( 'mkb_history' );
 delete_option( 'mkb_locked_domain' );
 
-// Remove the credentials directory and its contents.
-$credentials_dir = WP_CONTENT_DIR . '/.claude-bridge';
-if ( is_dir( $credentials_dir ) ) {
-	$files = array( 'credentials.json', '.htaccess', 'index.php' );
-	foreach ( $files as $file ) {
-		$path = $credentials_dir . '/' . $file;
-		if ( file_exists( $path ) ) {
-			unlink( $path );
+// Remove current and legacy credential directories and their known files.
+$credentials_dirs = array(
+	WP_CONTENT_DIR . '/.mega-kadence-bridge',
+	WP_CONTENT_DIR . '/.claude-bridge',
+);
+foreach ( $credentials_dirs as $credentials_dir ) {
+	if ( is_dir( $credentials_dir ) ) {
+		$files = array( 'credentials.json', '.htaccess', 'index.php' );
+		foreach ( $files as $file ) {
+			$path = $credentials_dir . '/' . $file;
+			if ( file_exists( $path ) ) {
+				unlink( $path );
+			}
 		}
+		@rmdir( $credentials_dir );
 	}
-	@rmdir( $credentials_dir );
 }

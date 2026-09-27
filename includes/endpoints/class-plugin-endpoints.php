@@ -9,7 +9,7 @@
  *   POST /plugins/install-and-activate
  *
  * Used by the deploy wizard to install Fluent Forms (and any user-supplied
- * premium plugin ZIPs) without manual WP admin clicks. claude-bot already
+ * premium plugin ZIPs) without manual WP admin clicks. The bridge agent already
  * has the administrator role per class-activator.php, so it inherits the
  * activate_plugins and install_plugins capabilities natively.
  *

@@ -3,11 +3,11 @@
  * Activator — runs once when the plugin is activated.
  *
  * Responsibilities:
- *   1. Create the dedicated claude-bot WP user (administrator role).
+ *   1. Create or preserve the dedicated bridge agent WP user.
  *   2. Generate an Application Password for that user.
  *   3. Store the plain-text password in a wp_option so the Settings page
  *      can display it to the site owner.
- *   4. Write credentials to wp-content/.claude-bridge/credentials.json as
+ *   4. Write credentials to wp-content/.mega-kadence-bridge/credentials.json as
  *      a backup (protected from direct HTTP access).
  *   5. Create protection files (.htaccess, index.php) in the credentials dir.
  *
@@ -30,7 +30,7 @@ class MKB_Activator {
 		// FIX v1.0.1: Ensure .htaccess passes Authorization header (Hostinger/LiteSpeed).
 		self::ensure_htaccess_auth_passthrough();
 
-		$user_id = self::ensure_bot_user();
+		$user_id = self::ensure_agent_user();
 		if ( is_wp_error( $user_id ) ) {
 			deactivate_plugins( plugin_basename( MKB_PLUGIN_FILE ) );
 			wp_die(
@@ -83,12 +83,33 @@ class MKB_Activator {
 	}
 
 	/**
-	 * Ensure the claude-bot user exists with administrator role.
+	 * Ensure a dedicated agent user exists with administrator role.
+	 *
+	 * Existing installs keep their recorded user (including the historical
+	 * claude-bot login) so an upgrade never changes the Basic Auth username.
+	 * New installs use the provider-neutral mkb-agent login.
 	 *
 	 * @return int|WP_Error User ID on success, WP_Error on failure.
 	 */
-	private static function ensure_bot_user() {
-		$existing = get_user_by( 'login', MKB_BOT_USERNAME );
+	private static function ensure_agent_user() {
+		$recorded_user_id = (int) get_option( 'mkb_bot_user_id', 0 );
+		$existing         = $recorded_user_id > 0 ? get_userdata( $recorded_user_id ) : false;
+
+		if ( ! $existing ) {
+			$existing = get_user_by( 'login', MKB_AGENT_USERNAME );
+		}
+		if ( ! $existing ) {
+			$legacy_credentials = get_option( 'mkb_credentials', array() );
+			$is_legacy_install  = (
+				is_array( $legacy_credentials ) &&
+				isset( $legacy_credentials['bridge_user'] ) &&
+				MKB_LEGACY_BOT_USERNAME === $legacy_credentials['bridge_user']
+			) || is_dir( MKB_LEGACY_CREDENTIALS_DIR );
+
+			if ( $is_legacy_install ) {
+				$existing = get_user_by( 'login', MKB_LEGACY_BOT_USERNAME );
+			}
+		}
 		if ( $existing ) {
 			// Ensure the existing user has administrator role.
 			if ( ! in_array( 'administrator', (array) $existing->roles, true ) ) {
@@ -98,17 +119,17 @@ class MKB_Activator {
 			return $existing->ID;
 		}
 
-		$random_email = MKB_BOT_USERNAME . '+' . wp_generate_password( 8, false ) . '@localhost.invalid';
+		$random_email = MKB_AGENT_USERNAME . '+' . wp_generate_password( 8, false ) . '@localhost.invalid';
 
 		$user_id = wp_insert_user(
 			array(
-				'user_login'   => MKB_BOT_USERNAME,
+				'user_login'   => MKB_AGENT_USERNAME,
 				'user_pass'    => wp_generate_password( 32, true, true ),
 				'user_email'   => $random_email,
-				'display_name' => 'Claude Bot',
-				'first_name'   => 'Claude',
-				'last_name'    => 'Bot',
-				'description'  => 'Your personal Kadence wizard. This user lets Claude Code safely control your site through the Mega Kadence Bridge plugin. Do not delete — this is how Claude helps you build and edit your store.',
+				'display_name' => 'MKB Agent',
+				'first_name'   => 'MKB',
+				'last_name'    => 'Agent',
+				'description'  => 'Dedicated API user for Mega Kadence Bridge. It lets an authorized AI agent or automation client operate this Kadence site. Revoke its Application Password to remove bridge access.',
 				'role'         => 'administrator',
 			)
 		);
@@ -161,9 +182,14 @@ class MKB_Activator {
 
 		list( $plain_password, $item ) = $created;
 
+		$user = get_userdata( $user_id );
+		if ( ! $user ) {
+			return new WP_Error( 'mkb_agent_user_missing', 'The Mega Kadence Bridge agent user could not be loaded.' );
+		}
+
 		return array(
 			'bridge_url'   => rest_url( MKB_REST_NAMESPACE ),
-			'bridge_user'  => MKB_BOT_USERNAME,
+			'bridge_user'  => $user->user_login,
 			'bridge_pass'  => $plain_password,
 			'site_url'     => home_url(),
 			'user_id'      => $user_id,
@@ -182,7 +208,8 @@ class MKB_Activator {
 	}
 
 	/**
-	 * Write credentials to a protected JSON file in wp-content/.claude-bridge/
+	 * Write credentials to a protected JSON file in
+	 * wp-content/.mega-kadence-bridge/.
 	 *
 	 * This is the backup path for SSH-based workflows. The file is protected
 	 * by .htaccess deny rules and an index.php fallback for non-Apache hosts.
