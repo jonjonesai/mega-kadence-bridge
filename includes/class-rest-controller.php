@@ -7,7 +7,7 @@
  *
  * Authentication model:
  *   All endpoints require the request to be authenticated as a user with
- *   `manage_options` capability. In practice this is the claude-bot user
+ *   `manage_options` capability. In practice this is the dedicated agent user
  *   authenticating via its Application Password (HTTP Basic Auth, handled
  *   natively by WordPress 5.6+).
  *

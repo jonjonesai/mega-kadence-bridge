@@ -64,6 +64,8 @@ jobs:
           echo "=== asserting critical bundled files survive the build ==="
           REQUIRED=(
             "/tmp/mega-kadence-bridge/mega-kadence-bridge.php"
+            "/tmp/mega-kadence-bridge/SKILL.md"
+            "/tmp/mega-kadence-bridge/docs/AI-CLIENTS.md"
             "/tmp/mega-kadence-bridge/includes/lib/Parsedown.php"
             "/tmp/mega-kadence-bridge/includes/lib/plugin-update-checker/vendor/PucReadmeParser.php"
             "/tmp/mega-kadence-bridge/includes/lib/plugin-update-checker/load-v5p6.php"

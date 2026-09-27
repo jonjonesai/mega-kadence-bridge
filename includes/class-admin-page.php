@@ -111,7 +111,7 @@ class MKB_Admin_Page {
 
 		echo '<div class="notice notice-success is-dismissible mkb-welcome-notice">';
 		echo '<p><strong>' . esc_html__( 'Mega Kadence Bridge is ready!', 'mega-kadence-bridge' ) . '</strong></p>';
-		echo '<p>' . esc_html__( 'Your Claude wizard has been set up. Click below to view your credentials and start building with Claude Code.', 'mega-kadence-bridge' ) . '</p>';
+		echo '<p>' . esc_html__( 'Your AI-agent bridge has been set up. Click below to view credentials for Codex, Claude, or any compatible client.', 'mega-kadence-bridge' ) . '</p>';
 		echo '<p><a href="' . esc_url( $settings_url ) . '" class="button button-primary">' . esc_html__( 'View Credentials', 'mega-kadence-bridge' ) . '</a></p>';
 		echo '</div>';
 
@@ -164,13 +164,13 @@ class MKB_Admin_Page {
 			<?php endif; ?>
 
 			<p class="mkb-tagline">
-				<?php esc_html_e( 'Your Claude wizard for building Kadence sites. Copy the credentials below into your local .env file and start talking to Claude Code.', 'mega-kadence-bridge' ); ?>
+				<?php esc_html_e( 'Your model-agnostic bridge for building Kadence sites. Copy the credentials below into a local .env file for Codex, Claude, Cursor, or another HTTP-capable agent.', 'mega-kadence-bridge' ); ?>
 			</p>
 
 			<div class="mkb-card">
 				<h2><?php esc_html_e( 'Your Credentials', 'mega-kadence-bridge' ); ?></h2>
 				<p class="description">
-					<?php esc_html_e( 'These are the keys Claude uses to talk to your site. Copy the block below and paste it into a file called .env in your project folder.', 'mega-kadence-bridge' ); ?>
+					<?php esc_html_e( 'These are the keys an authorized agent uses to talk to your site. Copy the block below into a file called .env in your project folder. Keep it private and never commit it.', 'mega-kadence-bridge' ); ?>
 				</p>
 
 				<?php if ( empty( $credentials ) || empty( $credentials['bridge_pass'] ) ) : ?>
@@ -267,8 +267,24 @@ class MKB_Admin_Page {
 			__( 'WooCommerce', 'mega-kadence-bridge' )           => self::status_badge( $woo_active, __( 'Optional', 'mega-kadence-bridge' ) ),
 			__( 'LiteSpeed Cache', 'mega-kadence-bridge' )       => self::status_badge( $litespeed_active, __( 'Optional', 'mega-kadence-bridge' ) ),
 			__( 'Bridge REST Namespace', 'mega-kadence-bridge' ) => '<code>' . esc_html( MKB_REST_NAMESPACE ) . '</code>',
-			__( 'Bot User', 'mega-kadence-bridge' )              => '<code>' . esc_html( MKB_BOT_USERNAME ) . '</code>',
+			__( 'Agent User', 'mega-kadence-bridge' )            => '<code>' . esc_html( self::get_agent_username() ) . '</code>',
 		);
+	}
+
+	/**
+	 * Return the actual bridge username, preserving legacy installations.
+	 *
+	 * @return string
+	 */
+	private static function get_agent_username() {
+		$credentials = get_option( 'mkb_credentials', array() );
+		if ( is_array( $credentials ) && ! empty( $credentials['bridge_user'] ) ) {
+			return sanitize_user( $credentials['bridge_user'] );
+		}
+
+		$user_id = (int) get_option( 'mkb_bot_user_id', 0 );
+		$user    = $user_id > 0 ? get_userdata( $user_id ) : false;
+		return $user ? $user->user_login : MKB_AGENT_USERNAME;
 	}
 
 	/**

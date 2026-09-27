@@ -66,14 +66,20 @@ class MKB_Capabilities_Endpoints {
 	private static function bridge_info() {
 		$locked  = (string) get_option( MKB_LOCKED_DOMAIN_OPTION, '' );
 		$current = (string) wp_parse_url( home_url(), PHP_URL_HOST );
+		$user    = wp_get_current_user();
 
 		return array(
-			'name'           => 'Mega Kadence Bridge',
-			'version'        => MKB_VERSION,
-			'namespace'      => MKB_REST_NAMESPACE,
-			'locked_domain'  => '' === $locked ? null : $locked,
-			'current_domain' => $current,
-			'domain_match'   => '' === $locked ? null : ( $locked === $current ),
+			'name'             => 'Mega Kadence Bridge',
+			'version'          => MKB_VERSION,
+			'namespace'        => MKB_REST_NAMESPACE,
+			'transport'        => 'authenticated_rest',
+			'authentication'   => 'wordpress_application_password_basic_auth',
+			'provider_agnostic' => true,
+			'model_provider'   => null,
+			'agent_username'   => $user && $user->exists() ? $user->user_login : null,
+			'locked_domain'    => '' === $locked ? null : $locked,
+			'current_domain'   => $current,
+			'domain_match'     => '' === $locked ? null : ( $locked === $current ),
 		);
 	}
 

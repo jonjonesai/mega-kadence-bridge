@@ -1,18 +1,18 @@
 # Mega Kadence Bridge
 
-> A WordPress plugin that turns any AI agent into a master of Kadence on your site.
+> A model-agnostic WordPress bridge that lets Codex, Claude, Cursor, local models, or any HTTP client operate Kadence on your site.
 
 MKB is the Kadence-fluent REST surface. It exposes Kadence Theme, Kadence Blocks, Kadence Pro, WooCommerce, and the underlying WP primitives as clean, reversible, agent-friendly endpoints — plus a `/capabilities` discovery call that teaches the agent the doctrine of operating Kadence correctly.
 
 Any Kadence site is in scope: a POD store, a product launch, a course site, a portfolio, an editorial publication, a local-service page, an agency demo. POD stores (the [Store Drop](https://mega.management) outcome) are the first proof, not the only one.
 
-Works with [Claude Code](https://claude.ai/code), Claude Desktop, Cursor, Windsurf, VS Code + Copilot, or anything else that can call an authenticated REST endpoint.
+MKB does not run a model and does not need a model-provider API key. It works with Codex, Claude Code, Claude Desktop, Cursor, Windsurf, VS Code + Copilot, local models, or anything else that can call an authenticated REST endpoint. See the [AI client guide](docs/AI-CLIENTS.md) and the provider-neutral [agent skill](SKILL.md).
 
 ## What It Does
 
 When you activate this plugin, it:
 
-1. Creates a dedicated `claude-bot` user with a WordPress Application Password
+1. Creates a dedicated `mkb-agent` user with a WordPress Application Password (upgrades preserve an existing `claude-bot` login)
 2. Locks itself to the current site domain so stale credentials can't operate a cloned site by accident
 3. Shows you a copy-paste `.env` block in **Settings → Mega Kadence Bridge**
 4. Exposes a clean REST API under `/wp-json/mega-kadence-bridge/v1/` that any AI agent can use to:
@@ -42,7 +42,7 @@ The doctrine the agent follows comes from the bridge itself: every agent that ca
 3. Choose the ZIP file → **Install Now** → **Activate**
 4. Go to **Settings → Mega Kadence Bridge**
 5. Click **Copy as .env** and paste the block into a file called `.env` in your local project folder
-6. Install [Claude Code](https://claude.ai/code) and open your project folder — Claude reads `.env` automatically
+6. Open the project with Codex, Claude Code, Cursor, or another compatible agent and tell it to use the included `mega-kadence-bridge` skill
 
 ### Option B — SSH (for advanced users)
 
@@ -51,7 +51,7 @@ cd /path/to/wordpress/wp-content/plugins/
 curl -L -o mega-kadence-bridge.zip https://github.com/jonjonesai/mega-kadence-bridge/releases/latest/download/mega-kadence-bridge.zip
 unzip mega-kadence-bridge.zip
 wp plugin activate mega-kadence-bridge
-cat /path/to/wordpress/wp-content/.claude-bridge/credentials.json
+cat /path/to/wordpress/wp-content/.mega-kadence-bridge/credentials.json
 ```
 
 The credentials file gives you the same values as the Settings page, suitable for scripting.
@@ -70,7 +70,7 @@ The plugin works with just free Kadence + Kadence Blocks. Kadence Pro and WooCom
 
 ## API Overview
 
-All endpoints require HTTP Basic Authentication with the `claude-bot` username and the Application Password shown on the Settings page. They also require the request to be hitting the **locked domain** the bridge was activated on — see [Domain locking](#domain-locking) below.
+All endpoints require HTTP Basic Authentication with the generated `BRIDGE_USER` and Application Password shown on the Settings page. New installs use `mkb-agent`; upgraded sites may retain `claude-bot`. They also require the request to be hitting the **locked domain** the bridge was activated on — see [Domain locking](#domain-locking) below.
 
 ### Discovery
 
@@ -150,13 +150,13 @@ All endpoints require HTTP Basic Authentication with the `claude-bot` username a
 | `/history/{id}` | GET | Get a specific snapshot |
 | `/rollback/{id}` | POST | Revert a change |
 
-Every write operation captures a snapshot of the previous state. If Claude (or you) makes a change you don't like, roll it back with a single call.
+Every write operation captures a snapshot of the previous state. If an agent (or you) makes a change you don't like, roll it back with a single call.
 
 ## Example — Hide the Page Title on the About Page
 
 ```bash
 BRIDGE_URL="https://yoursite.com/wp-json/mega-kadence-bridge/v1"
-AUTH="claude-bot:abcd 1234 wxyz 5678 qrst 9012"
+AUTH="${BRIDGE_USER}:${BRIDGE_PASS}"
 
 # 1. Find the page ID by slug
 PAGE_ID=$(curl -s -u "$AUTH" "$BRIDGE_URL/posts/find?slug=about" | jq -r '.id')
@@ -178,11 +178,11 @@ curl -s -u "$AUTH" "$BRIDGE_URL/render?url=/about/" | jq -r '.html' | grep -c 'p
 ## Security
 
 - All endpoints require authentication as an administrator
-- The `claude-bot` user can be revoked at any time by deleting its Application Password in **Users → Profile → Application Passwords** or by deactivating the plugin
-- Credentials are stored in `wp-content/.claude-bridge/credentials.json`, protected by `.htaccess` and `index.php`
+- The generated bridge agent user can be revoked at any time by deleting its Application Password in **Users → Profile → Application Passwords** or by deactivating the plugin
+- Credentials are stored in `wp-content/.mega-kadence-bridge/credentials.json`, protected by `.htaccess` and `index.php`
 - File permissions on credentials.json are set to `0600` (owner-read-only)
 - No outbound network traffic except the GitHub update checker
-- No data is sent to Mega or Anthropic — the bridge is 100% local to your server
+- No data is sent to Mega, OpenAI, Anthropic, or another model provider by the bridge — it is local to your server and only answers authenticated client requests
 
 ### Domain locking
 
@@ -217,4 +217,12 @@ Built on top of:
 - [Kadence Theme](https://www.kadencewp.com/) by StellarWP
 - [Kadence Blocks](https://github.com/stellarwp/kadence-blocks)
 - [plugin-update-checker](https://github.com/YahnisElsts/plugin-update-checker) by YahnisElsts
-- [Claude Code](https://claude.ai/code) by Anthropic
+- Compatible clients include [Codex](https://openai.com/codex/) and [Claude Code](https://claude.ai/code); neither is bundled or required
+
+## Upgrading from 1.5 or earlier
+
+Existing sites keep their recorded bridge user, including `claude-bot`, so the
+Basic Auth username does not change unexpectedly. Regenerating credentials or
+reactivating writes the current credentials to the neutral
+`wp-content/.mega-kadence-bridge/credentials.json` path. New installations use
+`mkb-agent` from the start.
