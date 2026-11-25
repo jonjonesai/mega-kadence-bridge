@@ -7,7 +7,8 @@
  *   GET  /render            Cache-bypassed HTML render of any URL
  *   POST /cache/flush       Flush all known cache layers
  *   GET  /plugins           List active plugins
- *   POST /wp-eval           Execute PHP (guarded, for expert use)
+ *
+ * POST /wp-eval lives in class-eval-endpoints.php (see that file for why).
  *
  * @package MegaKadenceBridge
  */
@@ -61,16 +62,6 @@ class MKB_Core_Endpoints {
 			array(
 				'methods'             => 'GET',
 				'callback'            => array( __CLASS__, 'list_plugins' ),
-				'permission_callback' => array( 'MKB_REST_Controller', 'check_permission' ),
-			)
-		);
-
-		register_rest_route(
-			$ns,
-			'/wp-eval',
-			array(
-				'methods'             => 'POST',
-				'callback'            => array( __CLASS__, 'wp_eval' ),
 				'permission_callback' => array( 'MKB_REST_Controller', 'check_permission' ),
 			)
 		);
@@ -232,38 +223,6 @@ class MKB_Core_Endpoints {
 				'plugins'      => $plugins,
 				'total'        => count( $plugins ),
 				'active_count' => count( $active_plugins ),
-			)
-		);
-	}
-
-	/**
-	 * POST /wp-eval — execute arbitrary PHP. Guarded and audit-logged.
-	 */
-	public static function wp_eval( $request ) {
-		$body = $request->get_json_params();
-		$code = isset( $body['code'] ) ? $body['code'] : '';
-
-		if ( empty( $code ) ) {
-			return MKB_REST_Controller::error( 'missing_code', 'PHP code is required.', 400 );
-		}
-
-		// Audit the eval attempt even if it fails.
-		MKB_History::record(
-			'wp_eval',
-			'<inline>',
-			null,
-			substr( $code, 0, 500 ),
-			array( 'user_id' => get_current_user_id() )
-		);
-
-		ob_start();
-		$result = eval( $code ); // phpcs:ignore Squiz.PHP.Eval
-		$output = ob_get_clean();
-
-		return MKB_REST_Controller::success(
-			array(
-				'result' => $result,
-				'output' => $output,
 			)
 		);
 	}
